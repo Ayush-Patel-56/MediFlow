@@ -15,7 +15,8 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const db = getDatabase(app);
+const isDbConfigured = firebaseConfig.databaseURL.startsWith("https://");
+const db = isDbConfigured ? getDatabase(app) : null;
 
 // Analytics handles differently due to SSR
 export const initAnalytics = async () => {
