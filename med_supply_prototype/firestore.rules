@@ -1,67 +1,16 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // --- Helper Functions ---
-    
-    function isSignedIn() {
-      return request.auth != null;
+    match /stocks/{doc} { 
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.facilityId; 
     }
-    
-    function getUserData() {
-      // Returns the user document from the users collection
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-    
-    function isCmsAdmin() {
-      return isSignedIn() && getUserData().role == 'cms_admin';
-    }
-    
-    function isFacilityHead(facilityId) {
-      return isSignedIn() && 
-             getUserData().role == 'facility_head' && 
-             getUserData().facilityId == facilityId;
-    }
-
-    // --- Collection Rules ---
-
-    // Users Collection
-    match /users/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || isCmsAdmin());
-      allow write: if false; // Security: Managed via Firebase Admin/Auth triggers
-    }
-
-    // Facilities Collection
-    match /facilities/{facilityId} {
-      allow read: if isSignedIn(); // Facility Head can browse map, CMS Admin sees all
-      allow write: if isCmsAdmin(); 
-      
-      // Stocks Subcollection
-      match /stocks/{stockId} {
-        allow read: if isCmsAdmin() || isFacilityHead(facilityId);
-        allow write: if isCmsAdmin() || isFacilityHead(facilityId);
-      }
-      
-      // Usage Logs Subcollection
-      match /usage_logs/{logId} {
-        allow read: if isCmsAdmin() || isFacilityHead(facilityId);
-        allow create: if isFacilityHead(facilityId);
-        allow update, delete: if isCmsAdmin();
-      }
-    }
-
-    // Requests Collection
-    match /requests/{requestId} {
-      allow read: if isSignedIn();
-      
-      // A facility_head can create requests
-      allow create: if isSignedIn() && getUserData().role == 'facility_head';
-      
-      // Only a cms_admin can update request status (Approve/Reject)
-      allow update: if isCmsAdmin();
-      
-      allow delete: if false;
+    match /requests/{doc} { 
+      allow read: if true; 
+      allow write: if request.auth != null; 
+    }  // Admin reads all
+    // Additional basic rules to ensure everything works
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

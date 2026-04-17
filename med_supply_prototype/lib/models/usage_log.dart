@@ -2,56 +2,39 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UsageLog {
   final String id;
-  final String stockId;
+  final String facilityId;
   final String medicineName;
-  final int qtyUsed;
-  final String loggedBy;
-  final DateTime loggedAt;
-  final String notes;
+  final DateTime date;
+  final int quantityUsed;
+  final int patientsTreated;
 
   UsageLog({
     required this.id,
-    required this.stockId,
+    required this.facilityId,
     required this.medicineName,
-    required this.qtyUsed,
-    required this.loggedBy,
-    required this.loggedAt,
-    required this.notes,
+    required this.date,
+    required this.quantityUsed,
+    required this.patientsTreated,
   });
 
-  factory UsageLog.fromFirestore(DocumentSnapshot doc) {
-    Map data = doc.data() as Map<String, dynamic>;
+  factory UsageLog.fromMap(Map<String, dynamic> map, String id) {
     return UsageLog(
-      id: doc.id,
-      stockId: data['stockId'] ?? '',
-      medicineName: data['medicineName'] ?? '',
-      qtyUsed: data['qtyUsed'] ?? 0,
-      loggedBy: data['loggedBy'] ?? '',
-      loggedAt: (data['loggedAt'] as Timestamp).toDate(),
-      notes: data['notes'] ?? '',
+      id: id,
+      facilityId: map['facilityId'] ?? '',
+      medicineName: map['medicineName'] ?? '',
+      date: (map['date'] as Timestamp).toDate(),
+      quantityUsed: map['quantityUsed']?.toInt() ?? 0,
+      patientsTreated: map['patientsTreated']?.toInt() ?? 0,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
-      'stockId': stockId,
+      'facilityId': facilityId,
       'medicineName': medicineName,
-      'qtyUsed': qtyUsed,
-      'loggedBy': loggedBy,
-      'loggedAt': Timestamp.fromDate(loggedAt),
-      'notes': notes,
+      'date': Timestamp.fromDate(date),
+      'quantityUsed': quantityUsed,
+      'patientsTreated': patientsTreated,
     };
   }
 }
-
-/**
- * Example Document (Subcollection of facilities):
- * {
- *   "stockId": "stock_abc_123",
- *   "medicineName": "Paracetamol 500mg",
- *   "qtyUsed": 20,
- *   "loggedBy": "Aarush (Facility Head)",
- *   "loggedAt": Timestamp.now(),
- *   "notes": "Daily clinic distribution"
- * }
- */
