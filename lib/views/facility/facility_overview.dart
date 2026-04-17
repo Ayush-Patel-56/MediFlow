@@ -34,7 +34,7 @@ class FacilityOverview extends ConsumerWidget {
           }
           final inventory = snapshot.data ?? [];
           final expiringSoon = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays < 90).length;
-          final lowStock = inventory.where((i) => i.currentQuantity < (i.initialQuantity * 0.15)).length;
+          final lowStock = inventory.where((i) => i.remainingQuantity < (i.initialQuantity * 0.15)).length;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(32),
@@ -53,9 +53,7 @@ class FacilityOverview extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 48),
-                Text('Current Inventory', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 24),
-                _buildInventoryTable(context, inventory),
+                _buildInventorySections(context, inventory),
               ],
             ),
           );
@@ -98,7 +96,87 @@ class FacilityOverview extends ConsumerWidget {
     );
   }
 
-  Widget _buildInventoryTable(BuildContext context, List<InventoryItem> inventory) {
+  Widget _buildInventorySections(BuildContext context, List<InventoryItem> inventory) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, 'Initial Stock Received', Icons.inventory_2),
+        const SizedBox(height: 16),
+        _buildInitialStockTable(context, inventory),
+        const SizedBox(height: 48),
+        _buildSectionTitle(context, 'Real-time Inventory', Icons.analytics),
+        const SizedBox(height: 16),
+        _buildCurrentInventoryTable(context, inventory),
+      ],
+    );
+  }
+
+  Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.blue[800], size: 28),
+        const SizedBox(width: 12),
+        Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.blue[900])),
+      ],
+    );
+  }
+
+  Widget _buildInitialStockTable(BuildContext context, List<InventoryItem> inventory) {
+    return _buildTableContainer(
+      DataTable(
+        headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
+        columns: const [
+          DataColumn(label: Text('Medicine Name')),
+          DataColumn(label: Text('Batch ID')),
+          DataColumn(label: Text('Initial Quantity')),
+          DataColumn(label: Text('Arrival Date')),
+        ],
+        rows: inventory.map((item) {
+          return DataRow(cells: [
+            DataCell(Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.bold))),
+            DataCell(Text(item.batchId)),
+            DataCell(Text(item.initialQuantity.toString())),
+            DataCell(Text(DateFormat('MMM dd, yyyy').format(item.arrivalDate))),
+          ]);
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCurrentInventoryTable(BuildContext context, List<InventoryItem> inventory) {
+    return _buildTableContainer(
+      DataTable(
+        headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
+        columns: const [
+          DataColumn(label: Text('Medicine Name')),
+          DataColumn(label: Text('Remaining Stock')),
+          DataColumn(label: Text('Expiry Date')),
+          DataColumn(label: Text('Status')),
+        ],
+        rows: inventory.map((item) {
+          final isLow = item.remainingQuantity < (item.initialQuantity * 0.15);
+          final isExpiring = item.expiryDate.difference(DateTime.now()).inDays < 90;
+          
+          Widget statusBadge;
+          if (isLow) statusBadge = _buildBadge('Low Stock', Colors.red);
+          else if (isExpiring) statusBadge = _buildBadge('Expiring Soon', Colors.orange);
+          else statusBadge = _buildBadge('Healthy', Colors.green);
+
+          return DataRow(cells: [
+            DataCell(Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.bold))),
+            DataCell(Text(item.remainingQuantity.toString(), style: TextStyle(
+              color: isLow ? Colors.red : Colors.black,
+              fontWeight: isLow ? FontWeight.bold : FontWeight.normal,
+            ))),
+            DataCell(Text(DateFormat('MMM dd, yyyy').format(item.expiryDate))),
+            DataCell(statusBadge),
+          ]);
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildTableContainer(Widget table) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -108,40 +186,7 @@ class FacilityOverview extends ConsumerWidget {
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 64),
-          child: DataTable(
-            headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
-            horizontalMargin: 12,
-            columnSpacing: 24,
-            columns: const [
-              DataColumn(label: Text('Medicine Name')),
-              DataColumn(label: Text('Batch ID')),
-              DataColumn(label: Text('Units Available')),
-              DataColumn(label: Text('Expiry Date')),
-              DataColumn(label: Text('Arrival Date')),
-              DataColumn(label: Text('Status')),
-            ],
-            rows: inventory.map((item) {
-              final isLow = item.currentQuantity < (item.initialQuantity * 0.15);
-              final isExpiring = item.expiryDate.difference(DateTime.now()).inDays < 90;
-              
-              Widget statusBadge;
-              if (isLow) statusBadge = _buildBadge('Low Stock', Colors.red);
-              else if (isExpiring) statusBadge = _buildBadge('Expiring Soon', Colors.orange);
-              else statusBadge = _buildBadge('Healthy', Colors.green);
-    
-              return DataRow(cells: [
-                DataCell(Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.bold))),
-                DataCell(Text(item.batchId, style: TextStyle(color: Colors.grey[600]))),
-                DataCell(Text('${item.currentQuantity} ${item.unit}')),
-                DataCell(Text(DateFormat('MMM dd, yyyy').format(item.expiryDate))),
-                DataCell(Text(DateFormat('MMM dd, yyyy').format(item.arrivalDate))),
-                DataCell(statusBadge),
-              ]);
-            }).toList(),
-          ),
-        ),
+        child: table,
       ),
     );
   }

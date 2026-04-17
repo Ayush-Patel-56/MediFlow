@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/facility.dart';
 import '../../services/firebase_service.dart';
+import '../../firebase_options.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final String role; // 'facility' or 'admin'
@@ -43,7 +44,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _seedDatabase() async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(firebaseServiceProvider).seedDatabase();
+      await ref.read(firebaseServiceProvider).seedDemoData();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Database seeded successfully!')),
       );
@@ -128,6 +129,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Text(
+                        'Project: ${DefaultFirebaseOptions.web.projectId}',
+                        style: TextStyle(color: Colors.grey[400], fontSize: 10),
+                      ),
+                      const SizedBox(height: 8),
                       Text(
                         'Welcome Back',
                         style: Theme.of(context).textTheme.headlineLarge?.copyWith(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../services/firebase_service.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -106,6 +108,21 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           ),
                     ),
                     const SizedBox(height: 64),
+                    Consumer(
+                      builder: (context, ref, child) {
+                        return TextButton.icon(
+                          onPressed: () async {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Seeding demo facilities... Please wait.')));
+                            await ref.read(firebaseServiceProvider).seedDemoData();
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo data seeded successfully!')));
+                          },
+                          icon: const Icon(Icons.data_saver_on, size: 16),
+                          label: const Text('Seed Demo Data'),
+                          style: TextButton.styleFrom(foregroundColor: Colors.grey[400]),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
                     _buildRoleCard(
                       context: context,
                       title: 'Facility Head',

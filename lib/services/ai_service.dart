@@ -1,6 +1,6 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/usage_log.dart';
+import '../models/daily_usage_log.dart';
 import '../models/request.dart';
 import '../models/facility.dart';
 
@@ -26,19 +26,25 @@ class AIService {
     }
   }
 
-  /// Forecasts demand for the next [days] based on 120 days of [logs].
-  Future<int> forecastDemand(String medicineName, List<UsageLog> logs, int daysToForecast) async {
+  /// Forecasts demand for the next [days] based on [logs].
+  Future<int> forecastDemand(String medicineName, List<DailyUsageLog> logs, int daysToForecast) async {
+    // Extract specific medicine usage from daily logs
+    final medLogs = logs.map((l) {
+      final usage = l.medicines.firstWhere((m) => m.medicineName == medicineName, orElse: () => MedicineUsage(medicineName: medicineName, unitsDistributed: 0));
+      return {'date': l.date, 'used': usage.unitsDistributed};
+    }).toList();
+
     if (_model == null) {
       // MOCK FALLBACK
       await Future.delayed(const Duration(seconds: 2));
-      if (logs.isEmpty) return daysToForecast * 15; // default guess
-      double avg = logs.fold(0, (sum, log) => sum + log.quantityUsed) / logs.length;
+      if (medLogs.isEmpty) return daysToForecast * 15; // default guess
+      double avg = medLogs.fold(0.0, (sum, log) => sum + (log['used'] as int)) / medLogs.length;
       // Add slight randomness to look like AI
       return (avg * daysToForecast * 1.1).round(); 
     }
 
     try {
-      final logSummary = logs.take(30).map((l) => 'Date: ${l.date.toIso8601String()}, Used: ${l.quantityUsed}').join('\n');
+      final logSummary = medLogs.take(30).map((l) => 'Date: ${(l['date'] as DateTime).toIso8601String()}, Used: ${l['used']}').join('\n');
       final prompt = '''
         You are an AI Demand Forecaster for a medical supply chain.
         Medicine: $medicineName
@@ -55,16 +61,16 @@ class AIService {
       final response = await _model!.generateContent(content);
       
       final text = response.text?.trim() ?? '';
-      return int.tryParse(text) ?? _fallbackForecast(logs, daysToForecast);
+      return int.tryParse(text) ?? _fallbackForecast(medLogs, daysToForecast);
     } catch (e) {
       print('Gemini API Error: $e');
-      return _fallbackForecast(logs, daysToForecast);
+      return _fallbackForecast(medLogs, daysToForecast);
     }
   }
 
-  int _fallbackForecast(List<UsageLog> logs, int daysToForecast) {
-    if (logs.isEmpty) return daysToForecast * 15;
-    double avg = logs.fold(0, (sum, log) => sum + log.quantityUsed) / logs.length;
+  int _fallbackForecast(List<Map<String, dynamic>> medLogs, int daysToForecast) {
+    if (medLogs.isEmpty) return daysToForecast * 15;
+    double avg = medLogs.fold(0.0, (sum, log) => sum + (log['used'] as int)) / medLogs.length;
     return (avg * daysToForecast * 1.1).round();
   }
 

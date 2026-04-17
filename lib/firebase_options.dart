@@ -39,11 +39,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAwLlcINjBjouKasJJ3cpJS5VeSQ1Y7SWc',
-    authDomain: 'mediflow-97c01.firebaseapp.com',
-    projectId: 'mediflow-97c01',
-    storageBucket: 'mediflow-97c01.firebasestorage.app',
-    messagingSenderId: '325908625328',
-    appId: '1:325908625328:web:8fe9991c9d014965ff4875',
+    apiKey: 'AIzaSyC7Y5Ls_fQdsYEyAV8dgsGWiSlsJ--Z2NQ',
+    authDomain: 'mediflow-92e6f.firebaseapp.com',
+    projectId: 'mediflow-92e6f',
+    storageBucket: 'mediflow-92e6f.firebasestorage.app',
+    messagingSenderId: '71200393927',
+    appId: '1:71200393927:web:346d720af6b9cf11898ce2',
   );
+
 }

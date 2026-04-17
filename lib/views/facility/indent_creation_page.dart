@@ -11,7 +11,7 @@ class IndentCreationPage extends StatefulWidget {
 class _IndentCreationPageState extends State<IndentCreationPage> {
   final List<Map<String, dynamic>> _indentItems = [
     {'medicine': 'Paracetamol', 'ai_suggested': 1200, 'requested': 1200, 'reason': 'AI Forecast (Winter Spike)'},
-    {'medicine': 'Cetirizine', 'ai_suggested': 800, 'requested': 800, 'reason': 'AI Forecast'},
+    {'medicine': 'Cough Syrup', 'ai_suggested': 800, 'requested': 800, 'reason': 'AI Forecast'},
   ];
 
   @override

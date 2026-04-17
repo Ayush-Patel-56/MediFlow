@@ -80,7 +80,7 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                         label: const Text('Generate Forecast', style: TextStyle(fontSize: 16)),
                         onPressed: _isForecasting ? null : () async {
                           setState(() => _isForecasting = true);
-                          final logs = await ref.read(firebaseServiceProvider).getUsageLogs(widget.facilityId, _selectedMed!);
+                          final logs = await ref.read(firebaseServiceProvider).getRecentLogs(widget.facilityId);
                           final result = await ref.read(aiServiceProvider).forecastDemand(_selectedMed!, logs, _forecastDays);
                           setState(() {
                             _forecastResult = result;

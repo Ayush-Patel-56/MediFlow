@@ -26,6 +26,7 @@ class _DailyLoggingPageState extends ConsumerState<DailyLoggingPage> {
     try {
       await ref.read(firebaseServiceProvider).logUsage(
         facilityId: widget.facilityId,
+        date: _selectedDate,
         medicineName: _medName,
         quantity: _quantity,
         patients: _patients,
@@ -87,7 +88,7 @@ class _DailyLoggingPageState extends ConsumerState<DailyLoggingPage> {
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: 'Medicine', border: OutlineInputBorder()),
                     value: _medName,
-                    items: ['Paracetamol', 'Amoxicillin', 'Ibuprofen', 'Cetirizine', 'Azithromycin']
+                    items: ['Paracetamol', 'Cough Syrup', 'ORS', 'Antibiotic', 'Vitamin Tablets']
                         .map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
                     onChanged: (v) => setState(() => _medName = v!),
                   ),
