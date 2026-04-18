@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../../models/facility.dart';
 import '../../services/firebase_service.dart';
 
@@ -16,6 +18,44 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
   List<Facility> _facilities = [];
   bool _isLoading = true;
   bool _showRoutes = false;
+  List<LatLng> _routePoints = [];
+
+  Future<void> _generateRoutes() async {
+    if (_facilities.length < 2) return;
+    
+    final start = _facilities[0];
+    final end = _facilities[1];
+    
+    try {
+      final url = Uri.parse('http://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full');
+      final response = await http.get(url);
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final routes = data['routes'] as List;
+        if (routes.isNotEmpty) {
+          final geometry = routes[0]['geometry'];
+          final coordinates = geometry['coordinates'] as List;
+          setState(() {
+            _routePoints = coordinates.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            _showRoutes = true;
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      print('Route fetch error: $e');
+    }
+    
+    // Fallback to straight line
+    setState(() {
+       _routePoints = [
+          LatLng(start.latitude, start.longitude),
+          LatLng(end.latitude, end.longitude),
+       ];
+       _showRoutes = true;
+    });
+  }
 
   @override
   void initState() {
@@ -70,7 +110,13 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                         child: FilledButton.icon(
                           icon: const Icon(Icons.route),
                           label: Text(_showRoutes ? 'Hide Routes' : 'Generate Optimal Routes'),
-                          onPressed: () => setState(() => _showRoutes = !_showRoutes),
+                          onPressed: () {
+                            if (_showRoutes) {
+                              setState(() => _showRoutes = false);
+                            } else {
+                              _generateRoutes();
+                            }
+                          },
                         ),
                       )
                     ],
@@ -120,7 +166,7 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                       PolylineLayer<Object>(
                         polylines: [
                           Polyline(
-                            points: [
+                            points: _routePoints.isNotEmpty ? _routePoints : [
                               LatLng(_facilities[0].latitude, _facilities[0].longitude),
                               LatLng(_facilities[1].latitude, _facilities[1].longitude),
                             ],

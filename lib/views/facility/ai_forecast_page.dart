@@ -165,9 +165,18 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
   }
 
   Widget _buildChart() {
-    // We use a dummy chart structure that looks like the AI projection from the mockups
+    // Generate dynamic chart data based on forecast result
     final baseData = [10.0, 12.0, 15.0, 13.0, 20.0, 25.0, 22.0, 30.0, 28.0];
-    final forecastData = [28.0, 35.0, 40.0, 38.0, 45.0];
+    List<double> forecastData = [];
+    
+    if (_forecastResult != null) {
+      double avgDailyForecast = _forecastResult! / _forecastDays;
+      double startPoint = baseData.last;
+      // Interpolate 5 points bridging to the new average
+      for (int i = 0; i <= 4; i++) { // Include starting point 28.0 so it connects, but shifted. Actually if we use e.key+8 it connects at index 0 which is 8.
+         forecastData.add(startPoint + ((avgDailyForecast - startPoint) * (i / 4.0)));
+      }
+    }
 
     return LineChart(
       LineChartData(

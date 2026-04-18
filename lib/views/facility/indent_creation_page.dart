@@ -13,6 +13,7 @@ class _IndentCreationPageState extends State<IndentCreationPage> {
     {'medicine': 'Paracetamol', 'ai_suggested': 1200, 'requested': 1200, 'reason': 'AI Forecast (Winter Spike)'},
     {'medicine': 'Cough Syrup', 'ai_suggested': 800, 'requested': 800, 'reason': 'AI Forecast'},
   ];
+  bool _isSubmitted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -54,16 +55,29 @@ class _IndentCreationPageState extends State<IndentCreationPage> {
                   ],
                   rows: _indentItems.map((item) {
                     return DataRow(cells: [
-                      DataCell(Text(item['medicine'], style: const TextStyle(fontWeight: FontWeight.bold))),
+                      DataCell(
+                        item['reason'] == 'Manual' && !_isSubmitted
+                            ? TextFormField(
+                                initialValue: item['medicine'],
+                                decoration: const InputDecoration(border: UnderlineInputBorder(), isDense: true),
+                                onChanged: (val) => item['medicine'] = val,
+                              )
+                            : Text(item['medicine'], style: const TextStyle(fontWeight: FontWeight.bold))
+                      ),
                       DataCell(Text(item['ai_suggested'].toString(), style: TextStyle(color: Colors.grey[600]))),
                       DataCell(TextFormField(
                         initialValue: item['requested'].toString(),
                         keyboardType: TextInputType.number,
+                        readOnly: _isSubmitted,
                         decoration: const InputDecoration(border: UnderlineInputBorder(), isDense: true),
                         onChanged: (val) => item['requested'] = int.tryParse(val) ?? 0,
                       )),
                       DataCell(Text(item['reason'])),
-                      DataCell(IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => _indentItems.remove(item)))),
+                      DataCell(
+                        _isSubmitted 
+                        ? const Icon(Icons.check, color: Colors.green) 
+                        : IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => _indentItems.remove(item)))
+                      ),
                     ]);
                   }).toList(),
                 ),
@@ -76,15 +90,16 @@ class _IndentCreationPageState extends State<IndentCreationPage> {
                 OutlinedButton.icon(
                   icon: const Icon(Icons.add),
                   label: const Text('Add Manual Item'),
-                  onPressed: () {
+                  onPressed: _isSubmitted ? null : () {
                     setState(() => _indentItems.add({'medicine': 'New Medicine', 'ai_suggested': 0, 'requested': 0, 'reason': 'Manual'}));
                   },
                 ),
                 FilledButton.icon(
                   icon: const Icon(Icons.send),
-                  label: const Text('Submit to CMS'),
+                  label: Text(_isSubmitted ? 'Submitted' : 'Submit to CMS'),
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20)),
-                  onPressed: () {
+                  onPressed: _isSubmitted ? null : () {
+                    setState(() => _isSubmitted = true);
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Indent submitted successfully!')));
                   },
                 ),

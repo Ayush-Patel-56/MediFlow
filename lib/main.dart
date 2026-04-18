@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'views/auth/role_selection_screen.dart';
 import 'views/auth/login_screen.dart';
 import 'views/shared/sidebar_layout.dart';
+import 'views/shared/help_page.dart';
 
 // Facility Pages
 import 'views/facility/facility_overview.dart';
@@ -82,6 +83,10 @@ final _router = GoRouter(
           path: '/facility/:id/alerts',
           builder: (context, state) => AlertsPage(facilityId: state.pathParameters['id']!),
         ),
+        GoRoute(
+          path: '/facility/:id/help',
+          builder: (context, state) => HelpPage(role: 'facility'),
+        ),
       ],
     ),
 
@@ -99,6 +104,10 @@ final _router = GoRouter(
         GoRoute(
           path: '/admin/routing',
           builder: (context, state) => const RouteOptimizationMap(),
+        ),
+        GoRoute(
+          path: '/admin/help',
+          builder: (context, state) => const HelpPage(role: 'admin'),
         ),
       ],
     ),

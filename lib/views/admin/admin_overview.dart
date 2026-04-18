@@ -1,7 +1,30 @@
 import 'package:flutter/material.dart';
 
-class AdminOverview extends StatelessWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../services/firebase_service.dart';
+import '../../models/request.dart';
+import '../../models/facility.dart';
+
+class AdminOverview extends ConsumerStatefulWidget {
   const AdminOverview({super.key});
+
+  @override
+  ConsumerState<AdminOverview> createState() => _AdminOverviewState();
+}
+
+class _AdminOverviewState extends ConsumerState<AdminOverview> {
+  List<Facility> _facilities = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFacilities();
+  }
+
+  Future<void> _loadFacilities() async {
+    final facs = await ref.read(firebaseServiceProvider).getFacilities();
+    if (mounted) setState(() => _facilities = facs);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,12 +64,34 @@ class AdminOverview extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Incoming Indent Requests', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 24),
-                      _buildRequestItem('Facility A', 'Paracetamol (500 units)', 'Critical Shortage', Colors.red),
-                      const Divider(),
-                      _buildRequestItem('Facility C', 'Amoxicillin (200 units)', 'Routine Indent', Colors.blue),
-                      const Divider(),
-                      _buildRequestItem('Facility D', 'Ibuprofen (100 units)', 'Routine Indent', Colors.blue),
+                      StreamBuilder<List<MedRequest>>(
+                        stream: ref.watch(firebaseServiceProvider).streamRequests(null),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) return const CircularProgressIndicator();
+                          final requestsList = snapshot.data ?? [];
+                          if (requestsList.isEmpty) return const Text('No incoming requests currently.');
+                          
+                          return Column(
+                            children: requestsList.map((req) {
+                              final facName = _facilities.firstWhere(
+                                (f) => f.id == req.facilityId, 
+                                orElse: () => Facility(id: '', name: 'Unknown Facility', type: 'clinic', email: '', region: '', latitude: 0, longitude: 0, createdAt: DateTime.now())
+                              ).name;
+                              
+                              final isShortage = req.type == RequestType.shortage;
+                              final color = isShortage ? Colors.red : Colors.green;
+                              final statusText = isShortage ? 'Shortage' : 'Surplus';
+                              
+                              return Column(
+                                children: [
+                                  _buildRequestItem(facName, '${req.medicineName} (${req.quantity} units)', statusText, color),
+                                  const Divider(),
+                                ],
+                              );
+                            }).toList(),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 );

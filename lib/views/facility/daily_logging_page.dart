@@ -15,7 +15,6 @@ class _DailyLoggingPageState extends ConsumerState<DailyLoggingPage> {
   final _formKey = GlobalKey<FormState>();
   String _medName = 'Paracetamol';
   int _quantity = 0;
-  int _patients = 0;
   bool _isSubmitting = false;
 
   Future<void> _submitLog() async {
@@ -29,7 +28,7 @@ class _DailyLoggingPageState extends ConsumerState<DailyLoggingPage> {
         date: _selectedDate,
         medicineName: _medName,
         quantity: _quantity,
-        patients: _patients,
+        patients: 0, // Fallback since UI removed Patients Served
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Log saved successfully')));
@@ -102,21 +101,32 @@ class _DailyLoggingPageState extends ConsumerState<DailyLoggingPage> {
                   ),
                   const SizedBox(height: 16),
                   
-                  TextFormField(
-                    decoration: const InputDecoration(labelText: 'Patients Served', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
-                    validator: (v) => (int.tryParse(v ?? '') == null) ? 'Enter valid number' : null,
-                    onSaved: (v) => _patients = int.parse(v!),
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: FilledButton(
-                      onPressed: _isSubmitting ? null : _submitLog,
-                      child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2) : const Text('Save Log'),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isSubmitting ? null : () async {
+                            setState(() => _isSubmitting = true);
+                            await Future.delayed(const Duration(seconds: 1)); // Simulate upload
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV logic processed successfully!')));
+                              setState(() => _isSubmitting = false);
+                            }
+                          },
+                          icon: const Icon(Icons.upload_file),
+                          label: const Text('Upload CSV Log'),
+                          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _isSubmitting ? null : _submitLog,
+                          style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                          child: _isSubmitting ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Save Log'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
