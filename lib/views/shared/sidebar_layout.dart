@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -57,8 +58,18 @@ class SidebarLayout extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
-          NavigationRail(
-            backgroundColor: Theme.of(context).colorScheme.surface,
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.65),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(2, 0))
+              ],
+            ),
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+                child: NavigationRail(
+                  backgroundColor: Colors.transparent,
             selectedIndex: selectedIndex,
             onDestinationSelected: (index) => _onItemTapped(index, context),
             labelType: NavigationRailLabelType.all,
@@ -99,9 +110,17 @@ class SidebarLayout extends StatelessWidget {
                     NavigationRailDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: Text('Routing')),
                     NavigationRailDestination(icon: Icon(Icons.help_outline), selectedIcon: Icon(Icons.help), label: Text('Help')),
                   ],
+                ),
+              ),
+            ),
           ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(child: child),
+          const VerticalDivider(thickness: 1, width: 1, color: Colors.transparent),
+          Expanded(
+            child: Container(
+              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+              child: child,
+            )
+          ),
         ],
       ),
     );

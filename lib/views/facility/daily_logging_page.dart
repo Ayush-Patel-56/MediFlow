@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:convert';
 import '../../services/firebase_service.dart';
 
 class DailyLoggingPage extends ConsumerStatefulWidget {
@@ -107,10 +110,42 @@ class _DailyLoggingPageState extends ConsumerState<DailyLoggingPage> {
                         child: OutlinedButton.icon(
                           onPressed: _isSubmitting ? null : () async {
                             setState(() => _isSubmitting = true);
-                            await Future.delayed(const Duration(seconds: 1)); // Simulate upload
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV logic processed successfully!')));
-                              setState(() => _isSubmitting = false);
+                            try {
+                              FilePickerResult? result = await FilePicker.pickFiles(
+                                type: FileType.custom,
+                                allowedExtensions: ['csv'],
+                                withData: true,
+                              );
+                              
+                              if (result != null && result.files.single.bytes != null) {
+                                final csvString = utf8.decode(result.files.single.bytes!);
+                                List<List<dynamic>> rows = csv.decode(csvString);
+                                
+                                int parsedCount = 0;
+                                bool first = true;
+                                for (var row in rows) {
+                                  if (first) { first = false; continue; }
+                                  if (row.length >= 2) {
+                                    final medName = row[0].toString();
+                                    final qty = int.tryParse(row[1].toString()) ?? 0;
+                                    if (qty > 0) {
+                                      await ref.read(firebaseServiceProvider).logUsage(
+                                        facilityId: widget.facilityId,
+                                        date: _selectedDate,
+                                        medicineName: medName,
+                                        quantity: qty,
+                                        patients: 0,
+                                      );
+                                      parsedCount++;
+                                    }
+                                  }
+                                }
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully processed $parsedCount records from CSV!')));
+                              }
+                            } catch (e) {
+                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error processing CSV: $e')));
+                            } finally {
+                              if (mounted) setState(() => _isSubmitting = false);
                             }
                           },
                           icon: const Icon(Icons.upload_file),

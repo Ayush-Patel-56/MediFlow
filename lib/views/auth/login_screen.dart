@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/facility.dart';
 import '../../services/firebase_service.dart';
 import '../../firebase_options.dart';
@@ -17,6 +18,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
   List<Facility> _facilities = [];
   Facility? _selectedFacility;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   void initState() {
@@ -60,13 +63,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  void _login() {
-    if (widget.role == 'facility') {
-      if (_selectedFacility != null) {
-        context.go('/facility/${_selectedFacility!.id}/overview');
+  Future<void> _login() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      if (widget.role == 'facility') {
+        if (_selectedFacility != null) {
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: _selectedFacility!.email,
+            password: _passwordController.text.trim(),
+          );
+          if (mounted) context.go('/facility/${_selectedFacility!.id}/overview');
+        }
+      } else {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+        if (mounted) context.go('/admin/overview');
       }
-    } else {
-      context.go('/admin/overview');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -194,7 +213,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const SizedBox(height: 24),
                       ],
 
+                      if (!isFacility) ...[
+                        TextField(
+                          controller: _emailController,
+                          decoration: InputDecoration(
+                            labelText: 'Admin Email',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       TextField(
+                        controller: _passwordController,
                         obscureText: true,
                         decoration: InputDecoration(
                           labelText: 'Password',

@@ -4,7 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'views/auth/role_selection_screen.dart';
 import 'views/auth/login_screen.dart';
@@ -31,11 +32,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  try {
-    await FirebaseAuth.instance.signInAnonymously();
-  } catch (e) {
-    print("Auth error: $e");
-  }
+  await dotenv.load(fileName: ".env");
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
   runApp(const ProviderScope(child: MediFlowApp()));
 }
 

@@ -1,11 +1,10 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:convert';
 import '../models/daily_usage_log.dart';
 import '../models/request.dart';
 import '../models/facility.dart';
-
-// IMPORTANT: Replace this with your actual Gemini API Key from Google AI Studio
-const String geminiApiKey = 'YOUR_API_KEY_HERE';
 
 final aiServiceProvider = Provider<AIService>((ref) {
   return AIService();
@@ -15,10 +14,11 @@ class AIService {
   late final GenerativeModel? _model;
 
   AIService() {
-    if (geminiApiKey != 'YOUR_API_KEY_HERE' && geminiApiKey.isNotEmpty) {
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (apiKey != 'YOUR_API_KEY_HERE' && apiKey != 'YOUR_ACTUAL_API_KEY_HERE' && apiKey.isNotEmpty) {
       _model = GenerativeModel(
         model: 'gemini-1.5-flash',
-        apiKey: geminiApiKey,
+        apiKey: apiKey,
       );
     } else {
       _model = null;
@@ -93,13 +93,38 @@ class AIService {
         I have the following current Shortage and Surplus requests across various facilities:
         $requestStrings
         
-        Generate a smart redistribution plan. Match surpluses to shortages, prioritizing short geographical distances to optimize logistics. 
-        Provide a concise, 2-3 sentence summary of the best actions to take.
+        Generate a smart redistribution plan. Match surpluses to shortages prioritizing short geographical distances. 
+        Provide a JSON array of transfer objects. Format exactly as:
+        [
+          {
+            "fromFacility": "Name",
+            "toFacility": "Name",
+            "medicine": "Medicine",
+            "quantity": 100,
+            "reasoning": "Distance minimizes logistics time."
+          }
+        ]
       ''';
 
+      final modelWithSchema = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: dotenv.env['GEMINI_API_KEY'] ?? '',
+        generationConfig: GenerationConfig(responseMimeType: 'application/json')
+      );
+
       final content = [Content.text(prompt)];
-      final response = await _model!.generateContent(content);
-      return response.text ?? 'Unable to generate plan.';
+      final response = await modelWithSchema.generateContent(content);
+      
+      try {
+        final List<dynamic> jsonList = jsonDecode(response.text ?? '[]');
+        List<String> routes = [];
+        for (var item in jsonList) {
+          routes.add('📦 Transfer ${item['quantity']} of ${item['medicine']} from ${item['fromFacility']} to ${item['toFacility']}.\nReason: ${item['reasoning']}');
+        }
+        return routes.join('\n\n');
+      } catch (e) {
+        return response.text ?? 'JSON parse failed for plan.';
+      }
     } catch (e) {
       print('Gemini API Error: $e');
       return "Error connecting to AI for matching. Please review manually.";

@@ -230,7 +230,14 @@ class FirebaseService {
     // 1. Clear old data to avoid duplicates and schema conflicts
     await clearDatabase();
 
-    // 2. Seed new facilities
+    // 2. Seed Admin
+    try {
+      await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
+    } catch (e) {
+      // Ignore if exists
+    }
+
+    // 3. Seed new facilities
     final List<Map<String, String>> demoFacilities = [
       {'name': 'Delhi Central Hospital', 'type': 'urban', 'email': 'urban@mediflow.com'},
       {'name': 'Sonipat Rural Clinic', 'type': 'rural', 'email': 'rural@mediflow.com'},
