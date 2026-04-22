@@ -105,7 +105,7 @@ class _DailyLoggingPageState extends ConsumerState<DailyLoggingPage> with Single
       await reader.onLoad.first;
 
       final csvString = reader.result as String;
-      final rows = CsvToListConverter().convert(csvString);
+      final rows = const CsvDecoder().convert(csvString);
       if (rows.isEmpty) return;
 
       int startRow = 0;

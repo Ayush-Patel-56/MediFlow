@@ -33,7 +33,7 @@ class _IndentCreationPageState extends ConsumerState<IndentCreationPage> {
       await reader.onLoad.first;
 
       final csvString = reader.result as String;
-      final rows = CsvToListConverter().convert(csvString);
+      final rows = const CsvDecoder().convert(csvString);
 
       if (rows.isEmpty) {
         if (mounted) {
