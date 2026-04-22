@@ -18,7 +18,7 @@ class AIService {
   AIService() {
     if (geminiApiKey.isNotEmpty && geminiApiKey != 'YOUR_API_KEY_HERE') {
       _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: 'gemini-1.5-flash-latest',
         apiKey: geminiApiKey,
         systemInstruction: Content.system('''
 You are a Medical Logistics AI Expert. 
@@ -117,7 +117,11 @@ Return a JSON array of objects.
     } catch (e) {
       print('Gemini Alert Error: $e');
       return [
-        {"severity": "red", "title": "Google AI Studio Blockade", "description": "Exception Raised: $e"}
+        {
+          "severity": "red", 
+          "title": "Google AI Studio Linkage Failure", 
+          "description": "The AI could not be reached. Error: $e. Tip: Check if 'gemini-1.5-flash-latest' is enabled in your API key settings or use a different model."
+        }
       ];
     }
   }
