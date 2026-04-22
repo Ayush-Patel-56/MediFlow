@@ -16,20 +16,9 @@ class AIService {
   late final GenerativeModel? _model;
 
   AIService() {
-    if (geminiApiKey.isNotEmpty && geminiApiKey != 'YOUR_API_KEY_HERE') {
-      _model = GenerativeModel(
-        model: 'gemini-1.5-flash-latest',
-        apiKey: geminiApiKey,
-        systemInstruction: Content.system('''
-You are a Medical Logistics AI Expert. 
-Your primary function is to strictly analyze dataset payloads and output robust JSON.
-Always respond with valid JSON without markdown wrapping. Ensure strict JSON formatting.
-'''),
-      );
-    } else {
-      _model = null;
-      print('WARNING: Gemini API Key not set. Using Mock AI Service.');
-    }
+    // Force Mock AI mode to avoid Gemini API connection issues per user request
+    _model = null;
+    print('AI Service: Mock mode enabled (Gemini link disabled).');
   }
 
   Future<Map<String, dynamic>> forecastDemand(String medicineName, List<DailyUsageLog> logs, int daysToForecast) async {
