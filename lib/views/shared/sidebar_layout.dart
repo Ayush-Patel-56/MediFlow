@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SidebarLayout extends StatelessWidget {
   final Widget child;
@@ -76,7 +77,10 @@ class SidebarLayout extends StatelessWidget {
                   child: IconButton(
                     icon: const Icon(Icons.logout),
                     tooltip: 'Logout',
-                    onPressed: () => context.go('/'),
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) context.go('/');
+                    },
                   ),
                 ),
               ),

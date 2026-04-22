@@ -39,7 +39,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       height: 400,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha: 0.05),
                       ),
                     ),
                   ),
@@ -51,7 +51,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       height: 500,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha: 0.05),
                       ),
                     ),
                   ),
@@ -181,13 +181,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(isHovering ? 0.2 : 0.05),
+                color: color.withValues(alpha: isHovering ? 0.2 : 0.05),
                 blurRadius: isHovering ? 20 : 10,
                 offset: const Offset(0, 10),
               ),
             ],
             border: Border.all(
-              color: isHovering ? color.withOpacity(0.5) : Colors.transparent,
+              color: isHovering ? color.withValues(alpha: 0.5) : Colors.transparent,
               width: 2,
             ),
           ),
@@ -196,7 +196,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, size: 40, color: color),

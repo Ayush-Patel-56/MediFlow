@@ -23,6 +23,10 @@ class FirebaseService {
 
   // --- AUTH & FACILITY ---
 
+  Future<auth.UserCredential> login(String email, String password) async {
+    return await _auth.signInWithEmailAndPassword(email: email, password: password);
+  }
+
   Future<void> signUpFacility({
     required String name,
     required String email,
@@ -85,6 +89,15 @@ class FirebaseService {
         .collection('medicines')
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => InventoryItem.fromMap(doc.data(), doc.id)).toList());
+  }
+
+  Future<List<InventoryItem>> getInventoryOnce(String facilityId) async {
+    final snapshot = await _firestore
+        .collection('inventory')
+        .doc(facilityId)
+        .collection('medicines')
+        .get();
+    return snapshot.docs.map((doc) => InventoryItem.fromMap(doc.data(), doc.id)).toList();
   }
 
   // --- DAILY USAGE LOGS ---
@@ -246,6 +259,17 @@ class FirebaseService {
         );
       } catch (e) {
         print('Error seeding $f: $e');
+      }
+    }
+
+    // 3. Seed Admin User
+    try {
+      await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
+    } catch (e) {
+      if (e is auth.FirebaseAuthException && e.code == 'email-already-in-use') {
+        // Admin already seeded
+      } else {
+        print('Error seeding admin: $e');
       }
     }
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../models/inventory_item.dart';
+import '../../models/daily_usage_log.dart';
 import '../../services/firebase_service.dart';
 import '../../services/ai_service.dart';
 
@@ -16,8 +17,41 @@ class AIForecastPage extends ConsumerStatefulWidget {
 class _AIForecastPageState extends ConsumerState<AIForecastPage> {
   int _forecastDays = 30;
   String? _selectedMed;
-  int? _forecastResult;
+  Map<String, dynamic>? _forecastResult;
   bool _isForecasting = false;
+
+  // Real historical usage data for the selected medicine
+  List<double> _historicalData = [];
+  bool _isLoadingHistory = false;
+
+  Future<void> _loadHistoricalData(String medicineName) async {
+    setState(() {
+      _isLoadingHistory = true;
+      _historicalData = [];
+      _forecastResult = null;
+    });
+    try {
+      final logs = await ref.read(firebaseServiceProvider).getRecentLogs(widget.facilityId, days: 30);
+      // Sort ascending by date so the chart reads left-to-right
+      final sorted = [...logs]..sort((a, b) => a.date.compareTo(b.date));
+      final data = sorted.map((log) {
+        final usage = log.medicines.firstWhere(
+          (m) => m.medicineName == medicineName,
+          orElse: () => MedicineUsage(medicineName: medicineName, unitsDistributed: 0),
+        );
+        return usage.unitsDistributed.toDouble();
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _historicalData = data;
+          _isLoadingHistory = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingHistory = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +73,10 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
           
           if (_selectedMed == null && medNames.isNotEmpty) {
             _selectedMed = medNames.first;
+            // Load initial data without calling setState inside build
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _loadHistoricalData(_selectedMed!);
+            });
           }
 
           return LayoutBuilder(
@@ -59,7 +97,10 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                       decoration: InputDecoration(labelText: 'Medicine', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                       value: _selectedMed,
                       items: medNames.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                      onChanged: (v) => setState(() { _selectedMed = v; _forecastResult = null; }),
+                      onChanged: (v) {
+                        setState(() { _selectedMed = v; _forecastResult = null; });
+                        if (v != null) _loadHistoricalData(v);
+                      },
                     ),
                     const SizedBox(height: 24),
                     DropdownButtonFormField<int>(
@@ -89,6 +130,24 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                         },
                       ),
                     ),
+                    if (_historicalData.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.history, color: Colors.teal, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text('${_historicalData.length} days of usage data loaded', style: const TextStyle(color: Colors.teal, fontSize: 13))),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               );
@@ -99,15 +158,29 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                   children: [
                     // Chart Container
                     Container(
-                      height: 400, // Fixed height for chart in scroll view
+                      height: 400,
                       padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)]),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Historical vs Forecasted Demand', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 32),
-                          Expanded(child: _buildChart()),
+                          Row(
+                            children: [
+                              Text('Historical vs Forecasted Demand', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                              const Spacer(),
+                              // Legend
+                              Row(children: [Container(width: 12, height: 12, color: Colors.blue), const SizedBox(width: 6), const Text('Historical', style: TextStyle(fontSize: 12))]),
+                              const SizedBox(width: 16),
+                              if (_forecastResult != null)
+                                Row(children: [Container(width: 12, height: 12, color: Colors.purple), const SizedBox(width: 6), const Text('Forecast', style: TextStyle(fontSize: 12))]),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Expanded(
+                            child: _isLoadingHistory
+                                ? const Center(child: CircularProgressIndicator())
+                                : _buildChart(),
+                          ),
                         ],
                       ),
                     ),
@@ -129,9 +202,16 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                           ),
                           const SizedBox(height: 16),
                           if (_forecastResult == null)
-                            Text('Run the forecaster to see AI insights.', style: TextStyle(color: Colors.blue[800], fontSize: 16))
+                            Text('Select a medicine and run the forecaster to see AI insights.', style: TextStyle(color: Colors.blue[800], fontSize: 16))
                           else
-                            Text('Based on the past 120 days of usage and seasonal trends (e.g., upcoming winter), Gemini predicts a total demand of $_forecastResult units for $_selectedMed over the next $_forecastDays days.', style: TextStyle(color: Colors.blue[800], fontSize: 16, height: 1.5)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Prediction: ${_forecastResult!['prediction']} units ($_forecastDays days)', style: TextStyle(color: Colors.blue[900], fontSize: 18, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                Text('${_forecastResult!['reasoning']}', style: TextStyle(color: Colors.blue[800], fontSize: 16, height: 1.5)),
+                              ],
+                            ),
                         ],
                       ),
                     ),
@@ -165,23 +245,63 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
   }
 
   Widget _buildChart() {
-    // We use a dummy chart structure that looks like the AI projection from the mockups
-    final baseData = [10.0, 12.0, 15.0, 13.0, 20.0, 25.0, 22.0, 30.0, 28.0];
-    final forecastData = [28.0, 35.0, 40.0, 38.0, 45.0];
+    // Use real historical data if available, otherwise show a placeholder message
+    final historicalSpots = _historicalData.isNotEmpty
+        ? _historicalData.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList()
+        : <FlSpot>[FlSpot(0, 0)];
+
+    // Forecast: draw a projected line from last historical point to predicted total/average
+    List<FlSpot> forecastSpots = [];
+    if (_forecastResult != null && _historicalData.isNotEmpty) {
+      final lastX = _historicalData.length - 1.0;
+      final lastY = _historicalData.last;
+      // The AI prediction is a total; derive a per-day average for projection end point
+      final predTotal = (_forecastResult!['prediction'] as num).toDouble();
+      final projectedEndY = predTotal / _forecastDays;
+      forecastSpots = [
+        FlSpot(lastX, lastY),
+        FlSpot(lastX + (_forecastDays / 3.0), projectedEndY * 0.8),
+        FlSpot(lastX + (_forecastDays / 1.5), projectedEndY),
+      ];
+    }
+
+    final maxY = [
+      if (_historicalData.isNotEmpty) _historicalData.reduce((a, b) => a > b ? a : b),
+      if (forecastSpots.isNotEmpty) forecastSpots.map((s) => s.y).reduce((a, b) => a > b ? a : b),
+      1.0,
+    ].reduce((a, b) => a > b ? a : b) * 1.2;
 
     return LineChart(
       LineChartData(
-        gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey[200], strokeWidth: 1)),
+        minY: 0,
+        maxY: maxY,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withValues(alpha: 0.15), strokeWidth: 1),
+        ),
         titlesData: FlTitlesData(
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (value, meta) => Text(value.toStringAsFixed(0), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ),
+          ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              reservedSize: 28,
               getTitlesWidget: (value, meta) {
-                if (value == 0) return const Text('Past');
-                if (value == 8) return const Text('Today');
-                if (value == 13) return const Text('Future');
+                final idx = value.toInt();
+                if (_historicalData.isEmpty) return const Text('');
+                if (idx == 0) return const Text('D-30', style: TextStyle(fontSize: 10, color: Colors.grey));
+                if (idx == _historicalData.length - 1) return const Text('Today', style: TextStyle(fontSize: 10, color: Colors.grey));
+                if (_forecastResult != null && idx == (_historicalData.length - 1 + _forecastDays ~/ 1.5)) {
+                  return const Text('Proj.', style: TextStyle(fontSize: 10, color: Colors.purple));
+                }
                 return const Text('');
               },
             ),
@@ -189,25 +309,25 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
         ),
         borderData: FlBorderData(show: false),
         lineBarsData: [
-          // Historical Line
+          // Historical Line — real Firestore data
           LineChartBarData(
-            spots: baseData.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
+            spots: historicalSpots,
             isCurved: true,
             color: Colors.blue,
-            barWidth: 4,
+            barWidth: 3,
             isStrokeCapRound: true,
             dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(show: true, color: Colors.blue.withOpacity(0.1)),
+            belowBarData: BarAreaData(show: true, color: Colors.blue.withValues(alpha: 0.08)),
           ),
-          // Forecast Line (Only shows if forecasted)
-          if (_forecastResult != null)
+          // Forecast projection line
+          if (forecastSpots.isNotEmpty)
             LineChartBarData(
-              spots: forecastData.asMap().entries.map((e) => FlSpot((e.key + 8).toDouble(), e.value)).toList(),
+              spots: forecastSpots,
               isCurved: true,
               color: Colors.purple,
-              barWidth: 4,
+              barWidth: 3,
               isStrokeCapRound: true,
-              dashArray: [5, 5], // Dotted line for forecast
+              dashArray: [6, 4],
               dotData: const FlDotData(show: false),
             ),
         ],

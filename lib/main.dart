@@ -30,11 +30,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  try {
-    await FirebaseAuth.instance.signInAnonymously();
-  } catch (e) {
-    print("Auth error: $e");
-  }
+  // Auth now strictly managed by LoginScreen
   runApp(const ProviderScope(child: MediFlowApp()));
 }
 

@@ -36,6 +36,8 @@ dependencies:
   collection: ^1.19.1
   # AI
   google_generative_ai: ^0.4.3
+  file_picker: ^11.0.2
+  csv: ^8.0.0
 
 dev_dependencies:
   flutter_test:

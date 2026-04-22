@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/inventory_item.dart';
 import '../../services/firebase_service.dart';
 import 'package:intl/intl.dart';
@@ -19,10 +21,41 @@ class FacilityOverview extends ConsumerWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
-            child: CircleAvatar(child: Icon(Icons.person)),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.notifications_none, color: Colors.black87),
+            tooltip: 'View Alerts',
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(value: 'header', enabled: false, child: Text('Recent Notifications', style: TextStyle(fontWeight: FontWeight.bold))),
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(value: 'low_stock', child: ListTile(leading: Icon(Icons.warning, color: Colors.orange), title: Text('Antibiotic stock low!'), dense: true, contentPadding: EdgeInsets.zero)),
+              const PopupMenuItem<String>(value: 'delivery', child: ListTile(leading: Icon(Icons.local_shipping, color: Colors.green), title: Text('Delivery expected in 2 days'), dense: true, contentPadding: EdgeInsets.zero)),
+            ],
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Profile Settings',
+            child: const Padding(
+              padding: EdgeInsets.only(left: 8.0, right: 16.0),
+              child: CircleAvatar(child: Icon(Icons.person, color: Colors.white), backgroundColor: Colors.teal),
+            ),
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(value: 'header', enabled: false, child: Text('Account Settings', style: TextStyle(fontWeight: FontWeight.bold))),
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(value: 'profile', child: ListTile(leading: Icon(Icons.manage_accounts), title: Text('Profile'), dense: true, contentPadding: EdgeInsets.zero)),
+              const PopupMenuItem<String>(value: 'security', child: ListTile(leading: Icon(Icons.security), title: Text('Security'), dense: true, contentPadding: EdgeInsets.zero)),
+              const PopupMenuItem<String>(value: 'theme', child: ListTile(leading: Icon(Icons.color_lens), title: Text('Theme Preferences'), dense: true, contentPadding: EdgeInsets.zero)),
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(value: 'signout', child: ListTile(leading: Icon(Icons.logout, color: Colors.red), title: Text('Sign Out', style: TextStyle(color: Colors.red)), dense: true, contentPadding: EdgeInsets.zero)),
+            ],
+            onSelected: (value) async {
+              if (value == 'signout') {
+                await FirebaseAuth.instance.signOut();
+                if (context.mounted) context.go('/');
+              } else if (value != 'header') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${value[0].toUpperCase()}${value.substring(1)} settings coming in a future update.')),
+                );
+              }
+            },
           ),
         ],
       ),
@@ -69,14 +102,14 @@ class FacilityOverview extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(width: 12),
@@ -100,13 +133,13 @@ class FacilityOverview extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(context, 'Initial Stock Received', Icons.inventory_2),
-        const SizedBox(height: 16),
-        _buildInitialStockTable(context, inventory),
-        const SizedBox(height: 48),
         _buildSectionTitle(context, 'Real-time Inventory', Icons.analytics),
         const SizedBox(height: 16),
         _buildCurrentInventoryTable(context, inventory),
+        const SizedBox(height: 48),
+        _buildSectionTitle(context, 'Initial Stock Received', Icons.inventory_2),
+        const SizedBox(height: 16),
+        _buildInitialStockTable(context, inventory),
       ],
     );
   }
@@ -182,7 +215,7 @@ class FacilityOverview extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -195,9 +228,9 @@ class FacilityOverview extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
     );
