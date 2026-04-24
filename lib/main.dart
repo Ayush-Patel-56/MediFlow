@@ -22,6 +22,7 @@ import 'views/facility/alerts_page.dart';
 // Admin Pages
 import 'views/admin/admin_overview.dart';
 import 'views/admin/route_optimization_map.dart';
+import 'views/shared/ai_chat_page.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> _facilityShellNavigatorKey = GlobalKey<NavigatorState>();
@@ -82,6 +83,10 @@ final _router = GoRouter(
           builder: (context, state) => AlertsPage(facilityId: state.pathParameters['id']!),
         ),
         GoRoute(
+          path: '/facility/:id/chat',
+          builder: (context, state) => AIChatPage(facilityId: state.pathParameters['id']!, role: 'facility'),
+        ),
+        GoRoute(
           path: '/facility/:id/help',
           builder: (context, state) => HelpPage(role: 'facility'),
         ),
@@ -102,6 +107,10 @@ final _router = GoRouter(
         GoRoute(
           path: '/admin/routing',
           builder: (context, state) => const RouteOptimizationMap(),
+        ),
+        GoRoute(
+          path: '/admin/chat',
+          builder: (context, state) => const AIChatPage(role: 'admin'),
         ),
         GoRoute(
           path: '/admin/help',
