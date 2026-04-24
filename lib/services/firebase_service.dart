@@ -201,6 +201,16 @@ class FirebaseService {
     await _firestore.collection('requests').add(request.toMap());
   }
 
+  Future<void> updateRequestStatus(String requestId, RequestStatus status) async {
+    await _firestore.collection('requests').doc(requestId).update({
+      'status': status.name,
+    });
+  }
+
+  Future<void> deleteRequest(String requestId) async {
+    await _firestore.collection('requests').doc(requestId).delete();
+  }
+
   // --- CLEANUP & SEEDING ---
 
   Future<void> clearDatabase() async {

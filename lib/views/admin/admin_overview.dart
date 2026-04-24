@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/firebase_service.dart';
-import '../../services/ai_service.dart';
-import '../../models/request.dart';
 import '../../models/facility.dart';
+import '../../models/request.dart';
+import '../../main.dart';
 
 class AdminOverview extends ConsumerStatefulWidget {
   const AdminOverview({super.key});
@@ -15,8 +16,6 @@ class AdminOverview extends ConsumerStatefulWidget {
 class _AdminOverviewState extends ConsumerState<AdminOverview> {
   List<Facility> _facilities = [];
   bool _isLoading = true;
-  bool _isOptimizing = false;
-  String? _optimizationResult;
 
   @override
   void initState() {
@@ -26,226 +25,271 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
 
   Future<void> _loadData() async {
     final facs = await ref.read(firebaseServiceProvider).getFacilities();
-    if (mounted) {
-      setState(() {
-        _facilities = facs;
-        _isLoading = false;
-      });
-    }
+    if (mounted) setState(() { _facilities = facs; _isLoading = false; });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-
-    // Admin views global requests, so facilityId is null
-    final requestsStream = ref.watch(firebaseServiceProvider).streamRequests(null);
-
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('CMS Admin Overview', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: StreamBuilder<List<MedRequest>>(
-        stream: requestsStream,
-        builder: (context, snapshot) {
-          final requests = snapshot.data ?? [];
-          final criticalShortages = requests.where((r) => r.type == RequestType.shortage || r.type == RequestType.regularIndent).length;
-          final identifiedSurplus = requests.where((r) => r.type == RequestType.surplus).length;
+      backgroundColor: MediColors.bg,
+      appBar: AppBar(title: const Text('Admin Dashboard')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Central Management System', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: MediColors.textPrimary)),
+                  const SizedBox(height: 4),
+                  const Text('Global supply chain intelligence', style: TextStyle(color: MediColors.textSecondary, fontSize: 14)),
+                  const SizedBox(height: 28),
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // KPI Metrics
-                Wrap(
-                  spacing: 24,
-                  runSpacing: 24,
-                  children: [
-                    _buildMetricCard(context, 'Total Facilities', _facilities.length.toString(), Icons.domain, Colors.indigo),
-                    _buildMetricCard(context, 'Total Indent Orders', requests.length.toString(), Icons.inventory, Colors.teal),
-                    _buildMetricCard(context, 'Active Shortages', criticalShortages.toString(), Icons.warning, Colors.red),
-                    _buildMetricCard(context, 'Identified Surplus', identifiedSurplus.toString(), Icons.add_circle, Colors.green),
-                  ],
-                ),
-                const SizedBox(height: 48),
+                  // KPI Row
+                  Wrap(
+                    spacing: 20,
+                    runSpacing: 20,
+                    children: [
+                      _buildKpi('Facilities', '${_facilities.length}', Icons.business_rounded, MediColors.info),
+                      _buildKpi('Active Regions', '${_facilities.map((f) => f.region).toSet().length}', Icons.public_rounded, MediColors.teal),
+                    ],
+                  ),
+                  const SizedBox(height: 36),
 
-                LayoutBuilder(
-                  builder: (context, constraints) {
+                  // Two column layout
+                  LayoutBuilder(builder: (context, constraints) {
                     final isWide = constraints.maxWidth > 900;
-                    
-                    final requestsSection = Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)]),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Incoming Indent Requests', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 24),
-                          if (requests.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: Text('No unfulfilled requests active in CMS.', style: TextStyle(fontStyle: FontStyle.italic)),
-                            )
-                          else
-                            ...requests.take(5).map((req) {
-                              final facName = _facilities.firstWhere((f) => f.id == req.facilityId, orElse: () => Facility(id: '', name: 'Unknown', email: '', type: '', region: '', latitude: 0, longitude: 0, createdAt: DateTime.now())).name;
-                              final isCrit = req.type == RequestType.shortage;
-                              return Column(
-                                children: [
-                                  _buildRequestItem(facName, '${req.medicineName} (${req.quantity} units)', isCrit ? 'Critical Shortage' : 'Routine Indent', isCrit ? Colors.red : Colors.blue),
-                                  const Divider(),
-                                ],
-                              );
-                            }),
-                        ],
-                      ),
-                    );
-
-                    final aiSection = Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.indigo[50]!, Colors.purple[50]!], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.indigo[100]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.auto_awesome, color: Colors.indigo),
-                              SizedBox(width: 12),
-                              Text('Smart Matching', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.indigo)),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text('Gemini AI can analyze current stock levels across all facilities and instantly suggest redistribution paths from surplus clinics to those in shortage.', style: TextStyle(color: Colors.indigo[900], height: 1.5)),
-                          const SizedBox(height: 32),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              icon: _isOptimizing
-                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : const Icon(Icons.flash_on),
-                              label: Text(_isOptimizing ? 'Analyzing...' : 'Run Global Optimization'),
-                              style: FilledButton.styleFrom(backgroundColor: Colors.indigo, padding: const EdgeInsets.symmetric(vertical: 20)),
-                              onPressed: _isOptimizing ? null : () async {
-                                setState(() {
-                                  _isOptimizing = true;
-                                  _optimizationResult = null;
-                                });
-                                final result = await ref.read(aiServiceProvider).generateRedistributionPlan(requests, _facilities);
-                                if (mounted) {
-                                  setState(() {
-                                    _isOptimizing = false;
-                                    _optimizationResult = result;
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                          if (_optimizationResult != null) ...[
-                            const SizedBox(height: 16),
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.indigo.withValues(alpha: 0.4)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(children: [
-                                    const Icon(Icons.check_circle, color: Colors.indigo, size: 18),
-                                    const SizedBox(width: 8),
-                                    const Text('AI Redistribution Plan', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
-                                  ]),
-                                  const SizedBox(height: 8),
-                                  Text(_optimizationResult!, style: TextStyle(color: Colors.indigo[900], fontSize: 13, height: 1.5)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-
+                    final facilities = _buildFacilitiesSection();
+                    final requests = _buildRequestsSection();
                     if (isWide) {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(flex: 2, child: requestsSection),
-                          const SizedBox(width: 32),
-                          Expanded(flex: 1, child: aiSection),
-                        ],
-                      );
-                    } else {
-                      return Column(
-                        children: [
-                          requestsSection,
-                          const SizedBox(height: 32),
-                          aiSection,
+                          Expanded(child: facilities),
+                          const SizedBox(width: 24),
+                          Expanded(child: requests),
                         ],
                       );
                     }
-                  },
-                ),
-              ],
+                    return Column(children: [facilities, const SizedBox(height: 24), requests]);
+                  }),
+                ],
+              ),
             ),
-          );
-        },
+    );
+  }
+
+  Widget _buildKpi(String title, String value, IconData icon, Color accent) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: MediColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: accent, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(value, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: accent)),
+            Text(title, style: const TextStyle(fontSize: 12, color: MediColors.textSecondary)),
+          ]),
+        ],
       ),
     );
   }
 
-  Widget _buildMetricCard(BuildContext context, String title, String value, IconData icon, Color color) {
+  Widget _buildFacilitiesSection() {
     return Container(
-      constraints: const BoxConstraints(minWidth: 200, maxWidth: 300),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+        color: MediColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: MediColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 16),
-          Text(title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: MediColors.info.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.business_rounded, color: MediColors.info, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Registered Facilities', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ..._facilities.map((f) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: MediColors.surfaceLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: MediColors.border),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(gradient: MediColors.cyanGradient, borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(f.name, style: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textPrimary)),
+                      Text('${f.type} • ${f.region}', style: const TextStyle(fontSize: 12, color: MediColors.textMuted)),
+                    ]),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: MediColors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Online', style: TextStyle(color: MediColors.success, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+          )),
         ],
       ),
     );
   }
 
-  Widget _buildRequestItem(String facility, String items, String status, Color statusColor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildRequestsSection() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: MediColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: MediColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text(facility, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 4),
-              Text(items, style: TextStyle(color: Colors.grey[600])),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: MediColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.receipt_long_rounded, color: MediColors.warning, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Incoming Requests', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-            child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 20),
+          StreamBuilder<List<MedRequest>>(
+            stream: ref.read(firebaseServiceProvider).streamRequests(null),
+            builder: (context, snap) {
+              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+              final requests = snap.data ?? [];
+              if (requests.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(child: Text('No pending requests', style: TextStyle(color: MediColors.textMuted))),
+                );
+              }
+              return Column(
+                children: requests.take(6).map((req) {
+                  final facName = _facilities.firstWhere(
+                    (f) => f.id == req.facilityId,
+                    orElse: () => Facility(id: '', name: 'Unknown', email: '', type: '', region: '', latitude: 0, longitude: 0, createdAt: DateTime.now()),
+                  ).name;
+                  final isCrit = req.type == RequestType.shortage;
+                  return _buildRequestItem(facName, req.medicineName, req.quantity, isCrit, req.id);
+                }).toList(),
+              );
+            },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRequestItem(String facility, String medicine, int qty, bool isCritical, String requestId) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: MediColors.surfaceLight,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isCritical ? MediColors.error.withValues(alpha: 0.3) : MediColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 4, height: 40,
+              decoration: BoxDecoration(
+                color: isCritical ? MediColors.error : MediColors.info,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(facility, style: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textPrimary, fontSize: 14)),
+                const SizedBox(height: 2),
+                Text('$medicine • $qty units', style: const TextStyle(fontSize: 12, color: MediColors.textMuted)),
+              ]),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: (isCritical ? MediColors.error : MediColors.info).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                isCritical ? 'Critical' : 'Routine',
+                style: TextStyle(color: isCritical ? MediColors.error : MediColors.info, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.check_circle_rounded, color: MediColors.success, size: 22),
+              tooltip: 'Approve',
+              onPressed: () async {
+                await ref.read(firebaseServiceProvider).updateRequestStatus(requestId, RequestStatus.approved);
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approved ✓')));
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.cancel_rounded, color: MediColors.error, size: 22),
+              tooltip: 'Reject',
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Reject Request?'),
+                    content: Text('Reject $medicine from $facility?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: FilledButton.styleFrom(backgroundColor: MediColors.error),
+                        child: const Text('Reject'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await ref.read(firebaseServiceProvider).deleteRequest(requestId);
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected and removed')));
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

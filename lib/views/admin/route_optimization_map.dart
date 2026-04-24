@@ -6,6 +6,7 @@ import '../../models/facility.dart';
 import '../../models/request.dart';
 import '../../services/firebase_service.dart';
 import '../../services/ai_service.dart';
+import '../../main.dart';
 
 class RouteOptimizationMap extends ConsumerStatefulWidget {
   const RouteOptimizationMap({super.key});
@@ -48,11 +49,9 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
     final requestsStream = ref.watch(firebaseServiceProvider).streamRequests(null);
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: MediColors.bg,
       appBar: AppBar(
-        title: const Text('Route Optimization View', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
+        title: const Text('Route Optimization'),
       ),
       body: StreamBuilder<List<MedRequest>>(
         stream: requestsStream,
@@ -95,7 +94,7 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
               // Left Panel: Logistics Details
               Container(
                 width: 400,
-                color: Colors.white,
+                color: MediColors.surface,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -104,35 +103,38 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Transfer Manifest', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                          const Text('Transfer Manifest', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
                           const SizedBox(height: 8),
-                          Text('AI-optimized redistribution paths derived directly from live Indent Orders.', style: TextStyle(color: Colors.grey[600])),
+                          const Text('AI-optimized redistribution paths from live Indent Orders.', style: TextStyle(color: MediColors.textSecondary, fontSize: 13)),
                           const SizedBox(height: 16),
                           if (_aiSummary.isNotEmpty && _showRoutes)
                              Container(
                                padding: const EdgeInsets.all(12),
-                               decoration: BoxDecoration(color: Colors.indigo.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                               child: Text(_aiSummary, style: TextStyle(color: Colors.indigo[900], fontStyle: FontStyle.italic)),
+                               decoration: BoxDecoration(color: MediColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+                               child: Text(_aiSummary, style: const TextStyle(color: MediColors.primaryLight, fontStyle: FontStyle.italic, fontSize: 13)),
                              ),
-                          const SizedBox(height: 24),
+                           const SizedBox(height: 24),
                           SizedBox(
                             width: double.infinity,
                             height: 50,
-                            child: FilledButton.icon(
-                              icon: const Icon(Icons.route),
-                              label: Text(_showRoutes ? 'Hide Routes' : 'Generate Optimal Routes'),
-                              onPressed: () async {
-                                if (!_showRoutes) {
-                                  // Call AI organically using realtime mapping
-                                  final summary = await ref.read(aiServiceProvider).generateRedistributionPlan(requests, _facilities);
-                                  setState(() {
-                                    _aiSummary = summary;
-                                    _showRoutes = true;
-                                  });
-                                } else {
-                                  setState(() => _showRoutes = false);
-                                }
-                              },
+                            child: Container(
+                              decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+                              child: FilledButton.icon(
+                                style: FilledButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent),
+                                icon: const Icon(Icons.route_rounded),
+                                label: Text(_showRoutes ? 'Hide Routes' : 'Generate Routes'),
+                                onPressed: () async {
+                                  if (!_showRoutes) {
+                                    final summary = await ref.read(aiServiceProvider).generateRedistributionPlan(requests, _facilities);
+                                    setState(() {
+                                      _aiSummary = summary;
+                                      _showRoutes = true;
+                                    });
+                                  } else {
+                                    setState(() => _showRoutes = false);
+                                  }
+                                },
+                              ),
                             ),
                           )
                         ],
@@ -141,14 +143,14 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                     const Divider(height: 1),
                     Expanded(
                       child: !_showRoutes 
-                        ? Center(child: Text('Generate routes to see manifest', style: TextStyle(color: Colors.grey[500])))
+                        ? const Center(child: Text('Generate routes to see manifest', style: TextStyle(color: MediColors.textMuted)))
                         : ListView(
                             padding: const EdgeInsets.all(24),
                             children: [
                               if (routeMatches.isEmpty) ...[
-                                const Text('No matching Surplus/Shortage vectors found among unfulfilled active Indents.', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                                const Text('No matching Surplus/Shortage vectors found.', style: TextStyle(fontWeight: FontWeight.bold, color: MediColors.warning)),
                                 const SizedBox(height: 12),
-                                const Text('Generate requests matching identical medicines on different facilities to populate routes.', style: TextStyle(color: Colors.grey)),
+                                const Text('Create matching medicine requests across facilities.', style: TextStyle(color: MediColors.textMuted)),
                               ] else ...[
                                 ...routeMatches.map((match) => _buildTransferCard(
                                   from: match['from'].name,
@@ -190,7 +192,7 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                                   LatLng(fromF.latitude, fromF.longitude),
                                   LatLng(toF.latitude, toF.longitude),
                                 ],
-                                color: Colors.indigo,
+                                color: MediColors.primary,
                                 strokeWidth: 4.0,
                               );
                             }).toList(),
@@ -199,11 +201,25 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                           markers: _facilities.map((f) {
                             return Marker(
                               point: LatLng(f.latitude, f.longitude),
-                              width: 80,
+                              width: 120,
                               height: 80,
-                              child: const Column(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.local_hospital, color: Colors.red, size: 40),
+                                  const Icon(Icons.local_hospital, color: Colors.red, size: 36),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4),
+                                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 4)],
+                                    ),
+                                    child: Text(
+                                      f.name.length > 16 ? '${f.name.substring(0, 14)}…' : f.name,
+                                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
@@ -217,15 +233,15 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                       right: 24,
                       child: Container(
                         padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]),
+                        decoration: BoxDecoration(color: MediColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: MediColors.border)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Legend', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text('Legend', style: TextStyle(fontWeight: FontWeight.bold, color: MediColors.textPrimary)),
                             const SizedBox(height: 8),
-                            Row(children: [Container(width: 16, height: 16, color: Colors.indigo), const SizedBox(width: 8), const Text('Active Transfer Vector')]),
+                            Row(children: [Container(width: 16, height: 16, color: MediColors.primary), const SizedBox(width: 8), const Text('Transfer Vector', style: TextStyle(color: MediColors.textSecondary, fontSize: 12))]),
                             const SizedBox(height: 8),
-                            const Row(children: [Icon(Icons.local_hospital, color: Colors.red, size: 16), SizedBox(width: 8), Text('Registered Facility')]),
+                            const Row(children: [Icon(Icons.local_hospital, color: Colors.red, size: 16), SizedBox(width: 8), Text('Facility', style: TextStyle(color: MediColors.textSecondary, fontSize: 12))]),
                           ],
                         ),
                       ),
@@ -244,51 +260,32 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+      decoration: BoxDecoration(color: MediColors.surfaceLight, borderRadius: BorderRadius.circular(14), border: Border.all(color: MediColors.border)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.outbound, color: Colors.orange, size: 20),
-              const SizedBox(width: 8),
-              Expanded(child: Text(from, style: const TextStyle(fontWeight: FontWeight.bold))),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Icon(Icons.arrow_downward, color: Colors.grey, size: 16),
-          ),
-          Row(
-            children: [
-              const Icon(Icons.input, color: Colors.green, size: 20),
-              const SizedBox(width: 8),
-              Expanded(child: Text(to, style: const TextStyle(fontWeight: FontWeight.bold))),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(medicine, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text(quantity, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(children: [const Icon(Icons.route, size: 14, color: Colors.indigo), const SizedBox(width: 4), Text(distance, style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))]),
-                  Row(children: [const Icon(Icons.schedule, size: 14, color: Colors.grey), const SizedBox(width: 4), Text(time, style: const TextStyle(color: Colors.grey))]),
-                ],
-              ),
-            ],
-          ),
+          Row(children: [
+            const Icon(Icons.outbound_rounded, color: MediColors.warning, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(from, style: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textPrimary))),
+          ]),
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Icon(Icons.arrow_downward_rounded, color: MediColors.textMuted, size: 16)),
+          Row(children: [
+            const Icon(Icons.input_rounded, color: MediColors.success, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(to, style: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textPrimary))),
+          ]),
+          const Divider(height: 24),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(medicine, style: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textPrimary)),
+              Text(quantity, style: const TextStyle(color: MediColors.textMuted, fontSize: 12)),
+            ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Row(children: [const Icon(Icons.route_rounded, size: 14, color: MediColors.primary), const SizedBox(width: 4), Text(distance, style: const TextStyle(color: MediColors.primary, fontWeight: FontWeight.w600))]),
+              Row(children: [const Icon(Icons.schedule_rounded, size: 14, color: MediColors.textMuted), const SizedBox(width: 4), Text(time, style: const TextStyle(color: MediColors.textMuted))]),
+            ]),
+          ]),
         ],
       ),
     );

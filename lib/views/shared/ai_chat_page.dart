@@ -1,89 +1,40 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/chat_service.dart';
+import '../../main.dart';
 
 class AIChatPage extends ConsumerStatefulWidget {
   final String? facilityId;
   final String role;
-
   const AIChatPage({super.key, this.facilityId, required this.role});
 
   @override
   ConsumerState<AIChatPage> createState() => _AIChatPageState();
 }
 
-class _AIChatPageState extends ConsumerState<AIChatPage> with TickerProviderStateMixin {
+class _AIChatPageState extends ConsumerState<AIChatPage> {
+  late ChatService _chatService;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode();
-  final List<ChatMessage> _messages = [];
-  late ChatService _chatService;
-  bool _isLoading = false;
-  bool _isInitializing = true;
-
-  final List<String> _quickPrompts = [
-    '📊 Show inventory summary',
-    '⚠️ Any low stock alerts?',
-    '📈 Usage trends this week',
-    '💊 Which medicine is used most?',
-    '📋 Pending supply requests',
-    '🔮 Predict next month demand',
-  ];
+  final List<Map<String, String>> _messages = [];
+  bool _isTyping = false;
 
   @override
   void initState() {
     super.initState();
     _chatService = ChatService();
-    _initChat();
+    _chatService.startChat(widget.facilityId);
   }
 
-  Future<void> _initChat() async {
-    setState(() => _isInitializing = true);
-    
-    if (!_chatService.isAvailable) {
-      setState(() {
-        _isInitializing = false;
-        _messages.add(ChatMessage(
-          text: '⚠️ Gemini API key not found. Please add your API key to the .env file to enable AI Chat.',
-          isUser: false,
-        ));
-      });
-      return;
-    }
-
-    await _chatService.startChat(widget.facilityId);
-    setState(() {
-      _isInitializing = false;
-      _messages.add(ChatMessage(
-        text: 'Hello! 👋 I\'m your MediFlow AI Assistant. I have access to your facility data including inventory, usage logs, and supply requests.\n\nAsk me anything about your medical supplies!',
-        isUser: false,
-      ));
-    });
-  }
-
-  Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty || _isLoading) return;
-
-    setState(() {
-      _messages.add(ChatMessage(text: text, isUser: true));
-      _isLoading = true;
-    });
-    _controller.clear();
-    _scrollToBottom();
-
-    final response = await _chatService.sendMessage(text);
-
-    setState(() {
-      _messages.add(ChatMessage(text: response, isUser: false));
-      _isLoading = false;
-    });
-    _scrollToBottom();
-    _focusNode.requestFocus();
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
@@ -94,238 +45,110 @@ class _AIChatPageState extends ConsumerState<AIChatPage> with TickerProviderStat
     });
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scrollController.dispose();
-    _focusNode.dispose();
-    super.dispose();
+  Future<void> _sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    _controller.clear();
+
+    setState(() {
+      _messages.add({'role': 'user', 'text': text});
+      _isTyping = true;
+    });
+    _scrollToBottom();
+
+    try {
+      final response = await _chatService.sendMessage(text);
+      if (mounted) {
+        setState(() {
+          _messages.add({'role': 'ai', 'text': response});
+          _isTyping = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add({'role': 'ai', 'text': 'Error: $e'});
+          _isTyping = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
-
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: MediColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryColor, primaryColor.withOpacity(0.7)],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+              decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 18),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('MediFlow AI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const Text('MediFlow AI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
                 Text(
-                  _isLoading ? 'Thinking...' : 'Online • ${_chatService.activeModelName}',
-                  style: TextStyle(fontSize: 12, color: _isLoading ? Colors.orange : Colors.green[600]),
+                  _chatService.activeModelName,
+                  style: const TextStyle(fontSize: 11, color: MediColors.textMuted),
                 ),
               ],
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Reset Chat',
-            onPressed: () {
-              setState(() {
-                _messages.clear();
-              });
-              _initChat();
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: Column(
         children: [
-          // Chat Messages
           Expanded(
-            child: _isInitializing
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 48, height: 48,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text('Loading facility data...', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                      ],
-                    ),
-                  )
-                : _messages.isEmpty
-                    ? _buildEmptyState(theme)
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        itemCount: _messages.length + (_isLoading ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == _messages.length && _isLoading) {
-                            return _buildTypingIndicator(primaryColor);
-                          }
-                          return _buildMessageBubble(_messages[index], theme);
-                        },
-                      ),
-          ),
-
-          // Quick Prompts (show only when few messages)
-          if (_messages.length <= 2 && !_isInitializing && _chatService.isAvailable)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _quickPrompts.map((prompt) => _buildQuickPromptChip(prompt, primaryColor)).toList(),
-              ),
-            ),
-
-          // Input Bar
-          _buildInputBar(primaryColor),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(ThemeData theme) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.auto_awesome, size: 64, color: theme.colorScheme.primary.withOpacity(0.3)),
-          const SizedBox(height: 16),
-          Text('Start a conversation', style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          Text('Ask about inventory, usage trends, or supply chain insights', style: TextStyle(fontSize: 13, color: Colors.grey[400])),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(ChatMessage message, ThemeData theme) {
-    final isUser = message.isUser;
-    final primaryColor = theme.colorScheme.primary;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            Container(
-              margin: const EdgeInsets.only(top: 4),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [primaryColor, primaryColor.withOpacity(0.7)]),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isUser ? primaryColor : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: Radius.circular(isUser ? 18 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 18),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+            child: _messages.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(24),
+                    itemCount: _messages.length + (_isTyping ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _messages.length && _isTyping) return _buildTypingIndicator();
+                      final msg = _messages[index];
+                      return _buildBubble(msg['role']!, msg['text']!);
+                    },
                   ),
-                ],
-              ),
-              child: SelectableText(
-                message.text,
-                style: TextStyle(
-                  color: isUser ? Colors.white : Colors.black87,
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-            ),
           ),
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            Container(
-              margin: const EdgeInsets.only(top: 4),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.teal[100],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.person, color: primaryColor, size: 16),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
-  Widget _buildTypingIndicator(Color primaryColor) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+          // Input bar
           Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [primaryColor, primaryColor.withOpacity(0.7)]),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                topRight: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-                bottomLeft: Radius.circular(4),
-              ),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
-              ],
+              color: MediColors.surface,
+              border: Border(top: BorderSide(color: MediColors.border)),
             ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildDot(primaryColor, 0),
-                const SizedBox(width: 4),
-                _buildDot(primaryColor, 1),
-                const SizedBox(width: 4),
-                _buildDot(primaryColor, 2),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    style: const TextStyle(color: MediColors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Ask about inventory, forecasts, alerts...',
+                      filled: true,
+                      fillColor: MediColors.surfaceLight,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(14)),
+                  child: IconButton(
+                    onPressed: _isTyping ? null : _sendMessage,
+                    icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
               ],
             ),
           ),
@@ -334,106 +157,143 @@ class _AIChatPageState extends ConsumerState<AIChatPage> with TickerProviderStat
     );
   }
 
-  Widget _buildDot(Color color, int index) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.3, end: 1.0),
-      duration: Duration(milliseconds: 600 + (index * 200)),
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Container(
-            width: 8,
-            height: 8,
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.6),
-              shape: BoxShape.circle,
+              color: MediColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(24),
             ),
+            child: const Icon(Icons.smart_toy_rounded, size: 52, color: MediColors.primary),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildQuickPromptChip(String text, Color primaryColor) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => _sendMessage(text),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: primaryColor.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: primaryColor.withOpacity(0.2)),
+          const SizedBox(height: 24),
+          const Text('MediFlow AI Assistant', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+          const SizedBox(height: 8),
+          const Text('Ask about inventory, forecasts, or supply chain insights', style: TextStyle(color: MediColors.textSecondary)),
+          const SizedBox(height: 32),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
+            children: [
+              _buildSuggestion('Show inventory status'),
+              _buildSuggestion('What is running low?'),
+              _buildSuggestion('Forecast demand'),
+            ],
           ),
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 13, color: primaryColor, fontWeight: FontWeight.w500),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputBar(Color primaryColor) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2)),
         ],
       ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  enabled: !_isLoading && _chatService.isAvailable,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: _sendMessage,
-                  decoration: InputDecoration(
-                    hintText: _chatService.isAvailable
-                        ? 'Ask about your inventory, usage, alerts...'
-                        : 'API key required',
-                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _isLoading || !_chatService.isAvailable
-                      ? [Colors.grey[300]!, Colors.grey[400]!]
-                      : [primaryColor, primaryColor.withOpacity(0.8)],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 20, height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                onPressed: _isLoading || !_chatService.isAvailable ? null : () => _sendMessage(_controller.text),
-              ),
-            ),
-          ],
+    );
+  }
+
+  Widget _buildSuggestion(String text) {
+    return OutlinedButton(
+      onPressed: () {
+        _controller.text = text;
+        _sendMessage();
+      },
+      style: OutlinedButton.styleFrom(
+        foregroundColor: MediColors.primary,
+        side: const BorderSide(color: MediColors.border),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Text(text, style: const TextStyle(fontSize: 13)),
+    );
+  }
+
+  Widget _buildBubble(String role, String text) {
+    final isUser = role == 'user';
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+        decoration: BoxDecoration(
+          gradient: isUser ? MediColors.primaryGradient : null,
+          color: isUser ? null : MediColors.surface,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: isUser ? const Radius.circular(18) : const Radius.circular(4),
+            bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(18),
+          ),
+          border: isUser ? null : Border.all(color: MediColors.border),
         ),
+        child: SelectableText(
+          text,
+          style: TextStyle(
+            color: isUser ? Colors.white : MediColors.textPrimary,
+            fontSize: 14,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: MediColors.surface,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(18), topRight: Radius.circular(18), bottomRight: Radius.circular(18), bottomLeft: Radius.circular(4),
+          ),
+          border: Border.all(color: MediColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) => Padding(
+            padding: EdgeInsets.only(right: i < 2 ? 6 : 0),
+            child: _BouncingDot(delay: i * 150),
+          )),
+        ),
+      ),
+    );
+  }
+}
+
+class _BouncingDot extends StatefulWidget {
+  final int delay;
+  const _BouncingDot({this.delay = 0});
+
+  @override
+  State<_BouncingDot> createState() => _BouncingDotState();
+}
+
+class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
+    _animation = Tween(begin: 0.0, end: -6.0).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) _controller.repeat(reverse: true);
+    });
+  }
+
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, _animation.value),
+        child: Container(width: 8, height: 8, decoration: BoxDecoration(color: MediColors.primary, shape: BoxShape.circle)),
       ),
     );
   }

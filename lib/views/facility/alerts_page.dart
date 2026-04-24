@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../services/firebase_service.dart';
 import '../../services/ai_service.dart';
+import '../../models/inventory_item.dart';
+import '../../main.dart';
 
 class AlertsPage extends ConsumerStatefulWidget {
   final String facilityId;
@@ -13,193 +14,90 @@ class AlertsPage extends ConsumerStatefulWidget {
 }
 
 class _AlertsPageState extends ConsumerState<AlertsPage> {
+  List<Map<String, dynamic>> _alerts = [];
   bool _isLoading = true;
-  List<Map<String, dynamic>> _diagnosticAlerts = [];
-  DateTime? _lastFetchTime;
 
   @override
   void initState() {
     super.initState();
-    _fetchAlerts();
+    _loadAlerts();
   }
 
-  Future<void> _fetchAlerts() async {
+  Future<void> _loadAlerts() async {
     setState(() => _isLoading = true);
     try {
       final inventory = await ref.read(firebaseServiceProvider).getInventoryOnce(widget.facilityId);
       final alerts = await ref.read(aiServiceProvider).generateSmartAlerts(inventory);
-      if (mounted) {
-        setState(() {
-          _diagnosticAlerts = alerts;
-          _isLoading = false;
-          _lastFetchTime = DateTime.now();
-        });
-      }
+      if (mounted) setState(() { _alerts = alerts; _isLoading = false; });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _lastFetchTime = DateTime.now();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating alerts: $e')));
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final redCount = _diagnosticAlerts.where((a) => a['severity'] == 'red').length;
-    final orangeCount = _diagnosticAlerts.where((a) => a['severity'] == 'orange').length;
-    final lastUpdatedStr = _lastFetchTime != null
-        ? 'Last analyzed: ${DateFormat('MMM dd, HH:mm').format(_lastFetchTime!)}'
-        : '';
-
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: MediColors.bg,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('AI Diagnostics & Alerts', style: TextStyle(fontWeight: FontWeight.bold)),
-            if (lastUpdatedStr.isNotEmpty)
-              Text(lastUpdatedStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.grey)),
-          ],
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
+        title: const Text('Smart Alerts'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.blue),
-            onPressed: _fetchAlerts,
-          )
+            icon: const Icon(Icons.refresh_rounded, color: MediColors.textSecondary),
+            onPressed: _loadAlerts,
+            tooltip: 'Refresh',
+          ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: Row(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(width: 16), Text("Gemini AI Analyzing Inventory...")]))
-          : ListView(
-              padding: const EdgeInsets.all(32),
-              children: [
-                // Severity Summary Row
-                if (_diagnosticAlerts.isNotEmpty) ...[
-                  Row(
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              padding: const EdgeInsets.all(28),
+              itemCount: _alerts.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('Alert Center', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: MediColors.textPrimary)),
+                      const SizedBox(height: 4),
+                      Text('${_alerts.length} active alerts detected', style: const TextStyle(color: MediColors.textSecondary)),
+                    ]),
+                  );
+                }
+                final alert = _alerts[index - 1];
+                final severity = alert['severity'] ?? 'red';
+                final color = severity == 'red' ? MediColors.error : severity == 'orange' ? MediColors.warning : MediColors.success;
+                final icon = severity == 'red' ? Icons.error_rounded : severity == 'orange' ? Icons.warning_rounded : Icons.check_circle_rounded;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: MediColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: color.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (redCount > 0) _buildSeverityChip('$redCount Critical', Colors.red),
-                      if (redCount > 0 && orangeCount > 0) const SizedBox(width: 12),
-                      if (orangeCount > 0) _buildSeverityChip('$orangeCount Warnings', Colors.orange),
-                      if (redCount == 0 && orangeCount == 0) _buildSeverityChip('All Clear', Colors.green),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                        child: Icon(icon, color: color, size: 22),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(alert['title'] ?? '', style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 15)),
+                          const SizedBox(height: 6),
+                          Text(alert['description'] ?? '', style: const TextStyle(color: MediColors.textSecondary, height: 1.5, fontSize: 13)),
+                        ]),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                ],
-                _buildAlertSection(
-                  context,
-                  'Active Logistics Diagnostics',
-                  Icons.psychology,
-                  Colors.blue,
-                  _diagnosticAlerts.map((alert) {
-                    final isRed = alert['severity'] == 'red';
-                    return _buildAlertCard(
-                      alert['title'] ?? 'Notice',
-                      alert['description'] ?? '',
-                      isRed ? Colors.red : Colors.orange,
-                    );
-                  }).toList(),
-                  showEmpty: _diagnosticAlerts.isEmpty,
-                ),
-                const SizedBox(height: 32),
-                _buildAlertSection(
-                  context,
-                  'AI Redistribution Suggestions',
-                  Icons.swap_horiz,
-                  Colors.indigo,
-                  [
-                    _buildAlertCard('Feature Offline', 'Automated redistribution optimization matching will be enabled in a future system pipeline.', Colors.indigo),
-                  ],
-                ),
-              ],
+                );
+              },
             ),
-    );
-  }
-
-  Widget _buildSeverityChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(label.contains('Clear') ? Icons.check_circle : Icons.warning_amber, color: color, size: 16),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAlertSection(BuildContext context, String title, IconData icon, Color color, List<Widget> children, {bool showEmpty = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 12),
-            Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (showEmpty) 
-           Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: const Text("All systems nominal. No critical shortages or dangerous expiries found in current inventory block.", style: TextStyle(color: Colors.green)))
-        else
-           ...children,
-      ],
-    );
-  }
-
-  Widget _buildAlertCard(String title, String message, Color color, {String? action}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8)],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(Icons.info_outline, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text(message, style: TextStyle(color: Colors.grey[700])),
-                if (action != null) ...[
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(foregroundColor: color, side: BorderSide(color: color)),
-                    onPressed: () {},
-                    child: Text(action),
-                  ),
-                ]
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
