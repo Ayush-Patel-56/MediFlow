@@ -186,9 +186,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                         return TextButton.icon(
                           onPressed: () async {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Seeding demo data...')));
-                            await ref.read(firebaseServiceProvider).seedDemoData();
+                            final error = await ref.read(firebaseServiceProvider).seedDemoData();
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo data seeded ✓')));
+                              if (error != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo data seeded ✓')));
+                              }
                             }
                           },
                           icon: const Icon(Icons.data_saver_on_rounded, size: 16),

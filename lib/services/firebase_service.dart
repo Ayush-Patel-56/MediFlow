@@ -268,51 +268,48 @@ class FirebaseService {
     }
   }
   
-  Future<void> seedDemoData() async {
-    // 1. Clear old data to avoid duplicates and schema conflicts
-    await clearDatabase();
-
-    // 2. Seed Admin
+  Future<String?> seedDemoData() async {
     try {
-      await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
-    } catch (e) {
-      // Ignore if exists
-    }
+      // 1. Clear old data to avoid duplicates and schema conflicts
+      await clearDatabase();
 
-    // 3. Seed new facilities
-    final List<Map<String, String>> demoFacilities = [
-      {'name': 'PHC Rampur', 'type': 'rural', 'email': 'rampur@mediflow.com', 'password': 'password123'},
-      {'name': 'CHC Modinagar', 'type': 'urban', 'email': 'modinagar@mediflow.com', 'password': 'password123'},
-      {'name': 'PHC Loni', 'type': 'urban', 'email': 'loni@mediflow.com', 'password': 'password123'},
-      {'name': 'DH Ghaziabad', 'type': 'urban', 'email': 'ghaziabad@mediflow.com', 'password': 'password123'},
-      {'name': 'PHC Bhojpur', 'type': 'rural', 'email': 'bhojpur@mediflow.com', 'password': 'password123'},
-      {'name': 'CHC Hapur', 'type': 'urban', 'email': 'hapur@mediflow.com', 'password': 'password123'},
-      {'name': 'PHC Dasna', 'type': 'rural', 'email': 'dasna@mediflow.com', 'password': 'password123'},
-      {'name': 'SubCentre Pilkhuwa', 'type': 'rural', 'email': 'pilkhuwa@mediflow.com', 'password': 'password123'},
-    ];
-
-    for (var f in demoFacilities) {
+      // 2. Seed Admin
       try {
-        await signUpFacility(
-          name: f['name']!,
-          email: f['email']!,
-          password: f['password']!,
-          type: f['type'],
-        );
+        await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
       } catch (e) {
-        print('Error seeding $f: $e');
+        // Ignore if exists
       }
-    }
 
-    // 3. Seed Admin User
-    try {
-      await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
-    } catch (e) {
-      if (e is auth.FirebaseAuthException && e.code == 'email-already-in-use') {
-        // Admin already seeded
-      } else {
-        print('Error seeding admin: $e');
+      // 3. Seed new facilities
+      final List<Map<String, String>> demoFacilities = [
+        {'name': 'PHC Rampur', 'type': 'rural', 'email': 'rampur@mediflow.com', 'password': 'password123'},
+        {'name': 'CHC Modinagar', 'type': 'urban', 'email': 'modinagar@mediflow.com', 'password': 'password123'},
+        {'name': 'PHC Loni', 'type': 'urban', 'email': 'loni@mediflow.com', 'password': 'password123'},
+        {'name': 'DH Ghaziabad', 'type': 'urban', 'email': 'ghaziabad@mediflow.com', 'password': 'password123'},
+        {'name': 'PHC Bhojpur', 'type': 'rural', 'email': 'bhojpur@mediflow.com', 'password': 'password123'},
+        {'name': 'CHC Hapur', 'type': 'urban', 'email': 'hapur@mediflow.com', 'password': 'password123'},
+        {'name': 'PHC Dasna', 'type': 'rural', 'email': 'dasna@mediflow.com', 'password': 'password123'},
+        {'name': 'SubCentre Pilkhuwa', 'type': 'rural', 'email': 'pilkhuwa@mediflow.com', 'password': 'password123'},
+      ];
+
+      for (var f in demoFacilities) {
+        try {
+          await signUpFacility(
+            name: f['name']!,
+            email: f['email']!,
+            password: f['password']!,
+            type: f['type'],
+          );
+          // Delay to avoid auth rate limits
+          await Future.delayed(const Duration(milliseconds: 1500));
+        } catch (e) {
+          print('Error seeding $f: $e');
+          return 'Failed at ${f['name']}: $e';
+        }
       }
+      return null; // Success
+    } catch (e) {
+      return 'Critical error: $e';
     }
   }
 }
