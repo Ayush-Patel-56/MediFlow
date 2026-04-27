@@ -41,23 +41,29 @@ class SimulationService {
     // 1. Initialize Inventory if not exists
     await _seedInventory(facilityId);
 
-    // 2. Simulate last 120 days in parallel chunks
+    // 2. Simulate last 120 days using a single WriteBatch
     final now = DateTime.now();
-    List<Future> dayFutures = [];
+    var batch = _firestore.batch();
+    int writeCount = 0;
+
     for (int i = 120; i >= 0; i--) {
       final date = now.subtract(Duration(days: i));
-      dayFutures.add(simulateDay(facilityId, facilityType, date));
-      
-      // Chunks of 20 to avoid overwhelming the connection
-      if (dayFutures.length >= 20) {
-        await Future.wait(dayFutures);
-        dayFutures = [];
+      _addSimulateDayToBatch(batch, facilityId, facilityType, date);
+      writeCount++;
+
+      // Batch limit is 500
+      if (writeCount >= 400) {
+        await batch.commit();
+        batch = _firestore.batch();
+        writeCount = 0;
       }
     }
-    if (dayFutures.isNotEmpty) await Future.wait(dayFutures);
+    
+    if (writeCount > 0) {
+      await batch.commit();
+    }
 
     // 3. Reset inventory to realistic remaining levels after simulation
-    // Without this, 120 days of simulated usage depletes everything to 0
     await _resetInventoryLevels(facilityId);
   }
 
@@ -114,21 +120,14 @@ class SimulationService {
     }
   }
 
-  Future<void> simulateDay(String facilityId, String facilityType, DateTime date) async {
+  void _addSimulateDayToBatch(WriteBatch batch, String facilityId, String facilityType, DateTime date) {
     // 1. Determine patient count
     int basePatients = facilityType == 'urban' ? 150 : 35;
     double variation = 0.8 + (_random.nextDouble() * 0.4); // 80% to 120%
     int totalPatients = (basePatients * variation).round();
 
     // 2. Generate medicine usage
-    final List<String> medicines = [
-      'Paracetamol', 
-      'Cough Syrup', 
-      'ORS', 
-      'Antibiotic', 
-      'Vitamin Tablets'
-    ];
-
+    final List<String> medicines = ['Paracetamol', 'Cough Syrup', 'ORS', 'Antibiotic', 'Vitamin Tablets'];
     List<MedicineUsage> usages = [];
     final month = date.month;
 
@@ -146,7 +145,7 @@ class SimulationService {
       usages.add(MedicineUsage(medicineName: med, unitsDistributed: unitsUsed));
     }
 
-    // 3. Write Daily Log
+    // 3. Write Daily Log to Batch
     final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
     final logRef = _firestore
         .collection('daily_usage_logs')
@@ -154,7 +153,7 @@ class SimulationService {
         .collection('logs')
         .doc(dateStr);
 
-    await logRef.set({
+    batch.set(logRef, {
       'date': Timestamp.fromDate(date),
       'medicines': usages.map((u) => u.toMap()).toList(),
       'totalPatients': totalPatients,
