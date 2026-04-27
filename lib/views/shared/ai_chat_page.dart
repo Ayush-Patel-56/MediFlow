@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/chat_service.dart';
+import '../../services/ai_service.dart';
+import '../../services/firebase_service.dart';
 import '../../main.dart';
 
 class AIChatPage extends ConsumerStatefulWidget {
@@ -13,17 +14,38 @@ class AIChatPage extends ConsumerStatefulWidget {
 }
 
 class _AIChatPageState extends ConsumerState<AIChatPage> {
-  late ChatService _chatService;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, String>> _messages = [];
   bool _isTyping = false;
+  Map<String, dynamic> _activeContext = {};
 
   @override
   void initState() {
     super.initState();
-    _chatService = ChatService();
-    _chatService.startChat(widget.facilityId);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadContext());
+  }
+
+  Future<void> _loadContext() async {
+    if (widget.facilityId != null) {
+      final firebase = ref.read(firebaseServiceProvider);
+      try {
+        final inventory = await firebase.getInventoryOnce(widget.facilityId!);
+        final logs = await firebase.getRecentLogs(widget.facilityId!, days: 60);
+        if (mounted) {
+          setState(() {
+            _activeContext = {
+              "system_state": "LIVE",
+              "data_sources": ["Firestore", "Local Logs"],
+              "current_inventory": inventory.map((i) => i.toMap()).toList(),
+              "historical_data": logs.map((l) => l.toMap()).toList(),
+            };
+          });
+        }
+      } catch (e) {
+        print('Error loading context: $e');
+      }
+    }
   }
 
   @override
@@ -51,16 +73,21 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
     _controller.clear();
 
     setState(() {
-      _messages.add({'role': 'user', 'text': text});
+      _messages.add({'role': 'user', 'content': text});
       _isTyping = true;
     });
     _scrollToBottom();
 
     try {
-      final response = await _chatService.sendMessage(text);
+      final response = await ref.read(aiServiceProvider).getChatResponse(
+            query: text,
+            context: _activeContext,
+            role: widget.role,
+            history: _messages.length > 10 ? _messages.sublist(_messages.length - 10) : _messages,
+          );
       if (mounted) {
         setState(() {
-          _messages.add({'role': 'ai', 'text': response});
+          _messages.add({'role': 'ai', 'content': response});
           _isTyping = false;
         });
         _scrollToBottom();
@@ -68,9 +95,10 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _messages.add({'role': 'ai', 'text': 'Error: $e'});
+          _messages.add({'role': 'ai', 'content': 'I encountered an error accessing the system: $e'});
           _isTyping = false;
         });
+        _scrollToBottom();
       }
     }
   }
@@ -92,9 +120,9 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('MediFlow AI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
-                Text(
-                  _chatService.activeModelName,
-                  style: const TextStyle(fontSize: 11, color: MediColors.textMuted),
+                const Text(
+                  'gemini-flash-lite-latest',
+                  style: TextStyle(fontSize: 11, color: MediColors.textMuted),
                 ),
               ],
             ),
@@ -113,7 +141,7 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
                     itemBuilder: (context, index) {
                       if (index == _messages.length && _isTyping) return _buildTypingIndicator();
                       final msg = _messages[index];
-                      return _buildBubble(msg['role']!, msg['text']!);
+                      return _buildBubble(msg['role']!, msg['content']!);
                     },
                   ),
           ),
