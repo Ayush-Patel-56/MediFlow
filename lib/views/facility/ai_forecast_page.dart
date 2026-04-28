@@ -112,7 +112,7 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                         onPressed: _isForecasting ? null : () async {
                           setState(() => _isForecasting = true);
                           final logs = await ref.read(firebaseServiceProvider).getRecentLogs(widget.facilityId);
-                          final result = await ref.read(aiServiceProvider).forecastDemand(_selectedMed!, logs, _forecastDays);
+                          final result = await ref.read(aiServiceProvider).forecastDemand(_selectedMed!, logs, _forecastDays, facilityId: widget.facilityId);
                           setState(() { _forecastResult = result; _isForecasting = false; });
                         },
                       ),

@@ -153,29 +153,44 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                                    child: Text(_aiSummary, style: const TextStyle(color: MediColors.primaryLight, fontStyle: FontStyle.italic, fontSize: 13)),
                                  ),
                                const SizedBox(height: 24),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 50,
-                                child: Container(
-                                  decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
-                                  child: FilledButton.icon(
-                                    style: FilledButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent),
-                                    icon: _isGenerating 
-                                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                      : Icon(_showRoutes ? Icons.refresh_rounded : Icons.auto_awesome),
-                                    label: Text(_showRoutes ? 'Re-optimize Routes' : 'Generate Optimal Routes'),
-                                    onPressed: _isGenerating ? null : () => _generateOptimalRoutes(requests),
-                                  ),
-                                ),
-                              ),
-                              if (_showRoutes)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: TextButton(
-                                    onPressed: () => setState(() => _showRoutes = false),
-                                    child: const Center(child: Text('Clear Map', style: TextStyle(color: MediColors.textMuted))),
-                                  ),
-                                ),
+                               SizedBox(
+                                 width: double.infinity,
+                                 height: 50,
+                                 child: Container(
+                                   decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+                                   child: FilledButton.icon(
+                                     style: FilledButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent),
+                                     icon: _isGenerating 
+                                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                       : Icon(_showRoutes ? Icons.refresh_rounded : Icons.auto_awesome),
+                                     label: Text(_showRoutes ? 'Re-optimize Routes' : 'Generate Optimal Routes'),
+                                     onPressed: _isGenerating ? null : () => _generateOptimalRoutes(requests),
+                                   ),
+                                 ),
+                               ),
+                               const SizedBox(height: 12),
+                               Center(
+                                 child: TextButton.icon(
+                                   icon: const Icon(Icons.science_outlined, size: 16),
+                                   label: const Text('Simulate Demo Scenario', style: TextStyle(fontSize: 12)),
+                                   onPressed: () async {
+                                     setState(() => _isGenerating = true);
+                                     await ref.read(firebaseServiceProvider).seedDemoData();
+                                     // RE-LOAD FACILITIES AFTER SEEDING
+                                     await _loadData(); 
+                                     setState(() => _isGenerating = false);
+                                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo scenario seeded! Click Generate to see routes.')));
+                                   },
+                                 ),
+                               ),
+                               if (_showRoutes)
+                                 Padding(
+                                   padding: const EdgeInsets.only(top: 8),
+                                   child: TextButton(
+                                     onPressed: () => setState(() => _showRoutes = false),
+                                     child: const Center(child: Text('Clear Map', style: TextStyle(color: MediColors.textMuted))),
+                                   ),
+                                 ),
                             ],
                           ),
                         ),
@@ -224,13 +239,13 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                             ),
                             if (_showRoutes)
                               PolylineLayer(
-                                polylines: _recommendations.map((rec) {
+                                polylines: _recommendations.map<Polyline>((rec) {
                                   final key = '${rec.donor.id}_${rec.recipient.id}';
                                   final points = _roadRoutes[key] ?? [LatLng(rec.donor.latitude, rec.donor.longitude), LatLng(rec.recipient.latitude, rec.recipient.longitude)];
                                   return Polyline(
                                     points: points,
-                                    color: rec.recipient.type == 'rural' ? Colors.blueAccent : MediColors.primary,
-                                    strokeWidth: 8.0,
+                                    color: (rec.recipient.type == 'rural' ? Colors.blueAccent : MediColors.primary).withValues(alpha: 0.8),
+                                    strokeWidth: 6.0,
                                   );
                                 }).toList(),
                               ),
@@ -239,7 +254,7 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
                                 bool isDonor = _recommendations.any((r) => r.donor.id == f.id);
                                 bool isRecipient = _recommendations.any((r) => r.recipient.id == f.id);
                                 
-                                Color markerColor = Colors.red; // default
+                                Color markerColor = MediColors.textMuted; 
                                 if (_showRoutes) {
                                   if (isDonor) markerColor = Colors.green;
                                   else if (isRecipient) markerColor = Colors.orange;
@@ -247,26 +262,46 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
 
                                 return Marker(
                                   point: LatLng(f.latitude, f.longitude),
-                                  width: 120,
-                                  height: 80,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.local_hospital, color: markerColor, size: 36),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(4),
-                                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 4)],
+                                  width: 100,
+                                  height: 70,
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Container(
+                                              width: 34,
+                                              height: 34,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4)],
+                                              ),
+                                            ),
+                                            Icon(Icons.local_hospital_rounded, color: markerColor, size: 28),
+                                          ],
                                         ),
-                                        child: Text(
-                                          f.name,
-                                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
-                                          overflow: TextOverflow.ellipsis,
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: MediColors.surface.withValues(alpha: 0.9),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: MediColors.border, width: 0.5),
+                                          ),
+                                          child: Text(
+                                            f.name,
+                                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: MediColors.textPrimary),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 );
                               }).toList(),

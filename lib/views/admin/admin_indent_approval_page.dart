@@ -69,16 +69,16 @@ class _AdminIndentApprovalPageState extends ConsumerState<AdminIndentApprovalPag
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: MediColors.bg,
-      appBar: AppBar(title: const Text('Pending Indent Approvals')),
+      appBar: AppBar(title: const Text('Pending Requests Approval')),
       body: StreamBuilder<List<MedRequest>>(
         stream: ref.read(firebaseServiceProvider).streamRequests(null),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
           
-          final pending = snapshot.data?.where((r) => r.status == RequestStatus.pending && r.type == RequestType.regularIndent).toList() ?? [];
+          final pending = snapshot.data?.where((r) => r.status == RequestStatus.pending).toList() ?? [];
 
           if (pending.isEmpty) {
-            return const Center(child: Text('No pending indent requests.', style: TextStyle(color: MediColors.textMuted)));
+            return const Center(child: Text('No pending requests.', style: TextStyle(color: MediColors.textMuted)));
           }
 
           return ListView.builder(
@@ -88,6 +88,8 @@ class _AdminIndentApprovalPageState extends ConsumerState<AdminIndentApprovalPag
               final req = pending[index];
               final isAiLoading = _aiLoading[req.id] ?? false;
               final suggestion = _aiSuggestions[req.id];
+
+              final isRedistribution = req.type == RequestType.surplus;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 20),
@@ -102,7 +104,27 @@ class _AdminIndentApprovalPageState extends ConsumerState<AdminIndentApprovalPag
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(req.medicineName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: MediColors.textPrimary)),
+                              Row(
+                                children: [
+                                  Text(req.medicineName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: MediColors.textPrimary)),
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isRedistribution ? MediColors.success.withValues(alpha: 0.1) : MediColors.error.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      isRedistribution ? 'REDISTRIBUTION REQUEST' : 'RESTOCK REQUEST',
+                                      style: TextStyle(
+                                        color: isRedistribution ? MediColors.success : MediColors.error,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 4),
                               Text('Facility: ${req.facilityId.replaceAll('_', ' ').toUpperCase()}', style: const TextStyle(color: MediColors.primaryLight, fontWeight: FontWeight.w600, fontSize: 12)),
                             ],

@@ -348,32 +348,14 @@ class FirebaseService {
         }
       }
 
-      // 4. Seed sample requests for Admin Dashboard KPIs
-      final String f1Id = demoFacilities[0]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_');
-      final String f2Id = demoFacilities[1]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_');
+      // 4. Seed sample requests for Admin Dashboard KPIs & Route Optimization
+      final String f1Id = demoFacilities[0]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Rampur (Rural)
+      final String f2Id = demoFacilities[1]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Modinagar (Urban)
+      final String f3Id = demoFacilities[2]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Loni (Urban)
+      final String f4Id = demoFacilities[3]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Ghaziabad (Urban)
+      final String f5Id = demoFacilities[4]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Bhojpur (Rural)
       
-      await addRequest(MedRequest(
-        id: '', 
-        facilityId: f1Id, 
-        medicineName: 'Antibiotic', 
-        type: RequestType.shortage, 
-        quantity: 500, 
-        requestDate: DateTime.now(), 
-        status: RequestStatus.pending,
-        notes: 'Stock critically low due to seasonal surge.'
-      ));
-
-      await addRequest(MedRequest(
-        id: '', 
-        facilityId: f2Id, 
-        medicineName: 'Paracetamol', 
-        type: RequestType.surplus, 
-        quantity: 1200, 
-        requestDate: DateTime.now(), 
-        status: RequestStatus.pending,
-        notes: 'Excess stock arriving soon, offering for redistribution.'
-      ));
-
+      // Match 1: ORS (Rampur Rural Needs, Modinagar Urban Surplus)
       await addRequest(MedRequest(
         id: '', 
         facilityId: f1Id, 
@@ -382,7 +364,52 @@ class FirebaseService {
         quantity: 800, 
         requestDate: DateTime.now(), 
         status: RequestStatus.pending,
-        notes: 'Monthly regular indent.'
+        notes: 'Critical shortage predicted by AI for summer spike.'
+      ));
+
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f2Id, 
+        medicineName: 'ORS', 
+        type: RequestType.surplus, 
+        quantity: 1000, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.pending,
+        notes: 'Excess stock identified. Available for redistribution.'
+      ));
+
+      // Match 2: Antibiotics (Bhojpur Rural Needs, Ghaziabad Urban Surplus)
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f5Id, 
+        medicineName: 'Antibiotic', 
+        type: RequestType.shortage, 
+        quantity: 300, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.approved,
+        notes: 'Post-monsoon surge in infections.'
+      ));
+
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f4Id, 
+        medicineName: 'Antibiotic', 
+        type: RequestType.surplus, 
+        quantity: 500, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.pending,
+        notes: 'Surplus stock optimization.'
+      ));
+
+      // Unmatched: Paracetamol (Just for variety)
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f3Id, 
+        medicineName: 'Paracetamol', 
+        type: RequestType.regularIndent, 
+        quantity: 1200, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.pending,
       ));
 
       return null; // Success

@@ -33,20 +33,40 @@ class OptimizationService {
     List<TransferRecommendation> recommendations = [];
     final Distance distanceCalc = const Distance();
 
-    // 1. Group pending indents by medicine
-    final pendingIndents = requests.where((r) => r.status == RequestStatus.pending && r.type == RequestType.regularIndent).toList();
+    // 1. Group needs (shortage or regular indent) by medicine
+    final pendingIndents = requests.where((r) => 
+      (r.status == RequestStatus.pending || r.status == RequestStatus.approved) && 
+      (r.type == RequestType.regularIndent || r.type == RequestType.shortage)
+    ).toList();
+    
+    // 2. Group explicit surplus offers
+    final surplusOffers = requests.where((r) => 
+      (r.status == RequestStatus.pending || r.status == RequestStatus.approved) && 
+      r.type == RequestType.surplus
+    ).toList();
     
     // Track working surpluses to allow multi-fulfillment
     Map<String, Map<String, int>> workingSurpluses = {}; // {facilityId: {medicineName: surplusQty}}
+    
+    // Initialize with live inventory levels (anything above 30% is a potential surplus)
     for (var f in facilities) {
       workingSurpluses[f.id] = {};
       final inv = inventories[f.id] ?? [];
       for (var item in inv) {
-        // Surplus is quantity above 50% of initial
-        int surplus = item.remainingQuantity - (item.initialQuantity * 0.5).toInt();
+        int surplus = item.remainingQuantity - (item.initialQuantity * 0.3).toInt();
         if (surplus > 0) {
           workingSurpluses[f.id]![item.medicineName] = surplus;
         }
+      }
+    }
+
+    // Layer in explicit surplus offers (these take precedence or add to it)
+    for (var offer in surplusOffers) {
+      workingSurpluses[offer.facilityId] ??= {};
+      final current = workingSurpluses[offer.facilityId]![offer.medicineName] ?? 0;
+      // Use the max of live surplus or explicit offer
+      if (offer.quantity > current) {
+        workingSurpluses[offer.facilityId]![offer.medicineName] = offer.quantity;
       }
     }
 

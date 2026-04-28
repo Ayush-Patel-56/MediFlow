@@ -30,18 +30,18 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
     final location = GoRouterState.of(context).uri.toString();
     if (widget.role == 'facility') {
       if (location.endsWith('/overview')) return 0;
-      if (location.endsWith('/forecast')) return 1;
-      if (location.endsWith('/indent')) return 2;
-      if (location.endsWith('/active-indents')) return 3;
-      if (location.endsWith('/logging')) return 4;
-      if (location.endsWith('/alerts')) return 5;
-      if (location.endsWith('/chat')) return 6;
-      if (location.endsWith('/help')) return 7;
+      if (location.endsWith('/logging')) return 1;
+      if (location.endsWith('/forecast')) return 2;
+      if (location.endsWith('/alerts')) return 3;
+      if (location.endsWith('/indent')) return 4;
+      if (location.endsWith('/active-indents')) return 4;
+      if (location.endsWith('/chat')) return 5;
+      if (location.endsWith('/help')) return 6;
       return 0;
     } else {
       if (location.endsWith('/overview')) return 0;
       if (location.endsWith('/approvals')) return 1;
-      if (location.endsWith('/indent-status')) return 2;
+      if (location.endsWith('/supply-status')) return 2;
       if (location.endsWith('/routing')) return 3;
       if (location.endsWith('/chat')) return 4;
       if (location.endsWith('/help')) return 5;
@@ -53,19 +53,18 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
     if (widget.role == 'facility' && widget.facilityId != null) {
       switch (index) {
         case 0: context.go('/facility/${widget.facilityId}/overview'); break;
-        case 1: context.go('/facility/${widget.facilityId}/forecast'); break;
-        case 2: context.go('/facility/${widget.facilityId}/indent'); break;
-        case 3: context.go('/facility/${widget.facilityId}/active-indents'); break;
-        case 4: context.go('/facility/${widget.facilityId}/logging'); break;
-        case 5: context.go('/facility/${widget.facilityId}/alerts'); break;
-        case 6: context.go('/facility/${widget.facilityId}/chat'); break;
-        case 7: context.go('/facility/${widget.facilityId}/help'); break;
+        case 1: context.go('/facility/${widget.facilityId}/logging'); break;
+        case 2: context.go('/facility/${widget.facilityId}/forecast'); break;
+        case 3: context.go('/facility/${widget.facilityId}/alerts'); break;
+        case 4: context.go('/facility/${widget.facilityId}/indent'); break;
+        case 5: context.go('/facility/${widget.facilityId}/chat'); break;
+        case 6: context.go('/facility/${widget.facilityId}/help'); break;
       }
     } else if (widget.role == 'admin') {
       switch (index) {
         case 0: context.go('/admin/overview'); break;
         case 1: context.go('/admin/approvals'); break;
-        case 2: context.go('/admin/indent-status'); break;
+        case 2: context.go('/admin/supply-status'); break;
         case 3: context.go('/admin/routing'); break;
         case 4: context.go('/admin/chat'); break;
         case 5: context.go('/admin/help'); break;
@@ -76,18 +75,17 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
   List<_NavItem> get _navItems => widget.role == 'facility'
       ? [
           _NavItem(Icons.grid_view_rounded, 'Overview'),
-          _NavItem(Icons.auto_graph_rounded, 'Forecast'),
-          _NavItem(Icons.receipt_long_rounded, 'Create Indent'),
-          _NavItem(Icons.inventory_2_rounded, 'Active Indents'),
           _NavItem(Icons.edit_calendar_rounded, 'Daily Log'),
+          _NavItem(Icons.auto_graph_rounded, 'Forecast'),
           _NavItem(Icons.notifications_active_rounded, 'Alerts'),
+          _NavItem(Icons.receipt_long_rounded, 'Requests'),
           _NavItem(Icons.smart_toy_rounded, 'AI Chat'),
           _NavItem(Icons.help_outline_rounded, 'Help'),
         ]
       : [
           _NavItem(Icons.dashboard_rounded, 'Overview'),
           _NavItem(Icons.rule_rounded, 'Approvals'),
-          _NavItem(Icons.history_rounded, 'Indent Status'),
+          _NavItem(Icons.history_rounded, 'Supply Status'),
           _NavItem(Icons.map_rounded, 'Route Opt.'),
           _NavItem(Icons.smart_toy_rounded, 'AI Chat'),
           _NavItem(Icons.help_outline_rounded, 'Help'),
@@ -138,15 +136,16 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
                         : Stream.value([]),
                     builder: (context, snapshot) {
                       final inventory = snapshot.data ?? [];
-                      final hasAlerts = inventory.any((i) => 
-                        (i.initialQuantity > 0 && i.remainingQuantity / i.initialQuantity < 0.35) ||
-                        i.expiryDate.difference(DateTime.now()).inDays < 90
-                      );
+                      final hasAlerts = inventory.any((i) {
+                        final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
+                        final daysLeft = i.expiryDate.difference(DateTime.now()).inDays;
+                        return pct <= 0.20 || i.remainingQuantity <= 500 || daysLeft <= 30;
+                      });
 
                       return Column(
                         children: List.generate(items.length, (i) {
                           final isSelected = i == selectedIndex;
-                          final isAlertTab = widget.role == 'facility' && i == 5; // Alerts index
+                          final isAlertTab = widget.role == 'facility' && i == 3; // Alerts index
                           return _buildNavItem(
                             items[i], 
                             isSelected, 

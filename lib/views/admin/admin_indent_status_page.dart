@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/firebase_service.dart';
 import '../../models/request.dart';
 import 'package:med_supply_prototype/constants/colors.dart';
@@ -39,7 +40,7 @@ class _AdminIndentStatusPageState extends ConsumerState<AdminIndentStatusPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: MediColors.bg,
-      appBar: AppBar(title: const Text('Indent Status History')),
+      appBar: AppBar(title: const Text('Supply Status')),
       body: StreamBuilder<List<MedRequest>>(
         stream: ref.read(firebaseServiceProvider).streamRequests(null),
         builder: (context, snapshot) {
@@ -49,7 +50,7 @@ class _AdminIndentStatusPageState extends ConsumerState<AdminIndentStatusPage> {
           requests.sort((a, b) => b.requestDate.compareTo(a.requestDate));
 
           if (requests.isEmpty) {
-            return const Center(child: Text('No requests found.', style: TextStyle(color: MediColors.textMuted)));
+            return const Center(child: Text('No supply requests found.', style: TextStyle(color: MediColors.textMuted)));
           }
 
           return SingleChildScrollView(
@@ -91,15 +92,18 @@ class _AdminIndentStatusPageState extends ConsumerState<AdminIndentStatusPage> {
           Expanded(flex: 3, child: Text('Medicine', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('Quantity', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('Status', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('Action', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
+          Expanded(flex: 3, child: Text('Global Optimization', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
+          Expanded(flex: 1, child: Text('', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
         ],
       ),
     );
   }
 
   Widget _buildTableRow(MedRequest req) {
+    final isApproved = req.status == RequestStatus.approved;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         children: [
           Expanded(flex: 2, child: Text('${req.requestDate.day}/${req.requestDate.month}', style: const TextStyle(color: MediColors.textSecondary))),
@@ -118,14 +122,32 @@ class _AdminIndentStatusPageState extends ConsumerState<AdminIndentStatusPage> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 3,
+            child: isApproved
+                ? Center(
+                    child: TextButton.icon(
+                      onPressed: () => context.go('/admin/routing'),
+                      icon: const Icon(Icons.auto_fix_high_rounded, size: 14),
+                      label: const Text('Optimize Routes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: MediColors.primary,
+                        backgroundColor: MediColors.primary.withValues(alpha: 0.08),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  )
+                : const Center(child: Text('—', style: TextStyle(color: MediColors.textMuted))),
+          ),
+          Expanded(
+            flex: 1,
             child: PopupMenuButton<RequestStatus>(
-              icon: const Icon(Icons.edit_note_rounded, color: MediColors.primaryLight),
+              icon: const Icon(Icons.more_vert_rounded, color: MediColors.textMuted, size: 20),
               onSelected: (status) => _updateStatus(req.id, status),
               itemBuilder: (context) => RequestStatus.values.where((s) => s != RequestStatus.draft).map((status) {
                 return PopupMenuItem(
                   value: status,
-                  child: Text(status.name.toUpperCase()),
+                  child: Text(status.name.toUpperCase(), style: const TextStyle(fontSize: 12)),
                 );
               }).toList(),
             ),

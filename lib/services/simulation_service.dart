@@ -84,24 +84,50 @@ class SimulationService {
     for (var doc in medsSnapshot.docs) {
       final data = doc.data();
       final int initial = data['initialQuantity'] ?? 2000;
+      final String medName = data['medicineName'] ?? '';
       
-      double factor;
-      if (persona == 1) {
-        // Critical Health: 5% - 20% (ensure some hit the <15% low stock trigger)
-        factor = 0.05 + (_random.nextDouble() * 0.15);
-      } else if (persona == 2) {
-        // High Health: 75% - 95%
-        factor = 0.75 + (_random.nextDouble() * 0.20);
+      int remaining;
+      int? daysToExpiryOverride;
+      if (facilityId == 'rampur_mediflow_com') {
+        if (medName == 'Antibiotic') {
+          remaining = (initial * 0.15).round(); // Low stock (15%)
+        } else if (medName == 'Paracetamol') {
+          remaining = (initial * 0.35).round(); // Expired (35% stock)
+          daysToExpiryOverride = -5;
+        } else if (medName == 'ORS') {
+          remaining = (initial * 0.95).round(); // Surplus (Wastage risk)
+          daysToExpiryOverride = 7;
+        } else if (medName == 'Cough Syrup') {
+          remaining = (initial * 0.45).round(); // Expiring soon (45% stock)
+          daysToExpiryOverride = 10;
+        } else if (medName == 'Vitamin Tablets') {
+          remaining = (initial * 0.30).round(); // Healthy but 30% stock
+        } else if (medName == 'Metformin 500mg') {
+          remaining = (initial * 0.28).round(); // Healthy but 28% stock
+        } else {
+          remaining = (initial * 0.32).round(); // Healthy but 32% stock
+        }
       } else {
-        // Normal: 40% - 65%
-        factor = 0.40 + (_random.nextDouble() * 0.25);
+        double factor;
+        if (persona == 1) {
+          factor = 0.05 + (_random.nextDouble() * 0.15);
+        } else if (persona == 2) {
+          factor = 0.75 + (_random.nextDouble() * 0.20);
+        } else {
+          factor = 0.40 + (_random.nextDouble() * 0.25);
+        }
+        remaining = (initial * factor).round();
       }
 
-      final int remaining = (initial * factor).round();
-      await doc.reference.update({
+      final Map<String, dynamic> updates = {
         'remainingQuantity': remaining,
         'lastUpdated': Timestamp.now(),
-      });
+      };
+      if (daysToExpiryOverride != null) {
+        updates['expiryDate'] = Timestamp.fromDate(DateTime.now().add(Duration(days: daysToExpiryOverride)));
+      }
+
+      await doc.reference.update(updates);
     }
   }
 
@@ -130,8 +156,16 @@ class SimulationService {
       final snapshot = await invRef.get();
       if (!snapshot.exists) {
         final int initialQty = 2000 + _random.nextInt(3000);
-        // Randomize expiry: some long, some soon (15-400 days)
-        final int daysToExpiry = _random.nextInt(10) < 2 ? 15 + _random.nextInt(60) : 180 + _random.nextInt(200);
+        
+        int daysToExpiry;
+        if (facilityId == 'rampur_mediflow_com') {
+          if (med == 'Paracetamol') daysToExpiry = -5; // Expired
+          else if (med == 'Cough Syrup') daysToExpiry = 10; // Expiring soon
+          else if (med == 'ORS') daysToExpiry = 7; // Expiring soon (wastage risk)
+          else daysToExpiry = 180 + _random.nextInt(200); // Normal
+        } else {
+          daysToExpiry = _random.nextInt(10) < 2 ? 15 + _random.nextInt(60) : 180 + _random.nextInt(200);
+        }
         
         await invRef.set({
           'medicineName': med,

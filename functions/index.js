@@ -1,13 +1,190 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { BigQuery } = require("@google-cloud/bigquery");
 
 admin.initializeApp();
+
+const bigquery = new BigQuery();
+const BQ_DATASET = process.env.BQ_DATASET || "mediflow_analytics";
+const BQ_LOCATION = process.env.BQ_LOCATION || "US";
+const tableReady = new Map();
 
 // Initialize Gemini 1.5 Pro
 // NOTE: GEMINI_API_KEY must be set in Firebase Secrets
 // Use: firebase functions:secrets:set GEMINI_API_KEY
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIza_FAKE_KEY");
+
+const BIGQUERY_TABLES = {
+  ai_decisions: {
+    schema: [
+      { name: "decision_id", type: "STRING", mode: "REQUIRED" },
+      { name: "occurred_at", type: "TIMESTAMP" },
+      { name: "facility_id", type: "STRING" },
+      { name: "medicine_name", type: "STRING" },
+      { name: "decision_type", type: "STRING" },
+      { name: "model", type: "STRING" },
+      { name: "prediction", type: "INTEGER" },
+      { name: "confidence", type: "STRING" },
+      { name: "recommendation", type: "STRING" },
+      { name: "reasoning", type: "STRING" },
+      { name: "period_days", type: "INTEGER" },
+      { name: "input_json", type: "STRING" },
+      { name: "output_json", type: "STRING" },
+    ],
+  },
+  transfer_requests: {
+    schema: [
+      { name: "request_id", type: "STRING", mode: "REQUIRED" },
+      { name: "facility_id", type: "STRING" },
+      { name: "medicine_name", type: "STRING" },
+      { name: "request_type", type: "STRING" },
+      { name: "quantity", type: "INTEGER" },
+      { name: "status", type: "STRING" },
+      { name: "request_date", type: "TIMESTAMP" },
+      { name: "notes", type: "STRING" },
+      { name: "captured_at", type: "TIMESTAMP" },
+      { name: "payload_json", type: "STRING" },
+    ],
+  },
+  inventory_snapshots: {
+    schema: [
+      { name: "snapshot_id", type: "STRING", mode: "REQUIRED" },
+      { name: "facility_id", type: "STRING" },
+      { name: "medicine_id", type: "STRING" },
+      { name: "medicine_name", type: "STRING" },
+      { name: "batch_id", type: "STRING" },
+      { name: "initial_quantity", type: "INTEGER" },
+      { name: "remaining_quantity", type: "INTEGER" },
+      { name: "unit", type: "STRING" },
+      { name: "expiry_date", type: "DATE" },
+      { name: "arrival_date", type: "DATE" },
+      { name: "stock_pct", type: "FLOAT" },
+      { name: "status", type: "STRING" },
+      { name: "captured_at", type: "TIMESTAMP" },
+      { name: "payload_json", type: "STRING" },
+    ],
+  },
+  usage_analytics: {
+    schema: [
+      { name: "usage_id", type: "STRING", mode: "REQUIRED" },
+      { name: "facility_id", type: "STRING" },
+      { name: "log_id", type: "STRING" },
+      { name: "usage_date", type: "DATE" },
+      { name: "medicine_name", type: "STRING" },
+      { name: "units_distributed", type: "INTEGER" },
+      { name: "total_patients", type: "INTEGER" },
+      { name: "captured_at", type: "TIMESTAMP" },
+      { name: "payload_json", type: "STRING" },
+    ],
+  },
+  audit_events: {
+    schema: [
+      { name: "event_id", type: "STRING", mode: "REQUIRED" },
+      { name: "occurred_at", type: "TIMESTAMP" },
+      { name: "actor_id", type: "STRING" },
+      { name: "source", type: "STRING" },
+      { name: "entity_type", type: "STRING" },
+      { name: "entity_id", type: "STRING" },
+      { name: "action", type: "STRING" },
+      { name: "facility_id", type: "STRING" },
+      { name: "medicine_name", type: "STRING" },
+      { name: "before_json", type: "STRING" },
+      { name: "after_json", type: "STRING" },
+      { name: "metadata_json", type: "STRING" },
+    ],
+  },
+};
+
+function safeJson(value) {
+  return JSON.stringify(value ?? null, (_, v) => {
+    if (v && typeof v.toDate === "function") return v.toDate().toISOString();
+    return v;
+  });
+}
+
+function toIsoTimestamp(value) {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  return value;
+}
+
+function toBigQueryDate(value) {
+  const iso = toIsoTimestamp(value);
+  return iso ? iso.substring(0, 10) : null;
+}
+
+function stockStatus(data) {
+  const initial = Number(data.initialQuantity || 0);
+  const remaining = Number(data.remainingQuantity || 0);
+  const pct = initial > 0 ? remaining / initial : 0;
+  const expiry = toIsoTimestamp(data.expiryDate);
+  const daysLeft = expiry ? Math.ceil((new Date(expiry).getTime() - Date.now()) / 86400000) : null;
+
+  if (daysLeft !== null && daysLeft < 0) return "expired";
+  if (pct >= 0.7 && daysLeft !== null && daysLeft <= 30) return "wastage_risk";
+  if (pct <= 0.2 || remaining <= 500) return "low_stock";
+  if (daysLeft !== null && daysLeft <= 30) return "expiring_soon";
+  return "healthy";
+}
+
+async function ensureBigQueryTable(tableName) {
+  if (tableReady.has(tableName)) return tableReady.get(tableName);
+
+  const promise = (async () => {
+    const dataset = bigquery.dataset(BQ_DATASET);
+    const [datasetExists] = await dataset.exists();
+    if (!datasetExists) {
+      await bigquery.createDataset(BQ_DATASET, { location: BQ_LOCATION });
+    }
+
+    const table = dataset.table(tableName);
+    const [tableExists] = await table.exists();
+    if (!tableExists) {
+      await dataset.createTable(tableName, {
+        schema: { fields: BIGQUERY_TABLES[tableName].schema },
+        timePartitioning: { type: "DAY" },
+      });
+    }
+    return table;
+  })();
+
+  tableReady.set(tableName, promise);
+  return promise;
+}
+
+async function insertBigQuery(tableName, rows) {
+  const rowList = Array.isArray(rows) ? rows : [rows];
+  if (rowList.length === 0) return;
+
+  try {
+    const table = await ensureBigQueryTable(tableName);
+    await table.insert(rowList, {
+      ignoreUnknownValues: true,
+      skipInvalidRows: true,
+    });
+  } catch (error) {
+    console.error(`BigQuery insert failed for ${tableName}`, error);
+  }
+}
+
+async function auditEvent({ eventId, action, entityType, entityId, before, after, facilityId, medicineName, metadata, actorId = null }) {
+  await insertBigQuery("audit_events", {
+    event_id: eventId,
+    occurred_at: new Date().toISOString(),
+    actor_id: actorId,
+    source: "firestore",
+    entity_type: entityType,
+    entity_id: entityId,
+    action,
+    facility_id: facilityId || after?.facilityId || before?.facilityId || null,
+    medicine_name: medicineName || after?.medicineName || before?.medicineName || null,
+    before_json: safeJson(before),
+    after_json: safeJson(after),
+    metadata_json: safeJson(metadata),
+  });
+}
 
 /**
  * 1. forecastDemand(facilityId, medicineNames[])
@@ -84,6 +261,174 @@ exports.forecastDemand = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', 'AI forecasting failed');
   }
 });
+
+/**
+ * 1b. logAIDecision()
+ * Explicit audit hook for client-side AI forecasts and stock-analysis decisions.
+ */
+exports.logAIDecision = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "User must log in");
+
+  const decisionId = data.decisionId || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await insertBigQuery("ai_decisions", {
+    decision_id: decisionId,
+    occurred_at: new Date().toISOString(),
+    facility_id: data.facilityId || null,
+    medicine_name: data.medicineName || null,
+    decision_type: data.decisionType || "stock_analysis",
+    model: data.model || "client_ai",
+    prediction: Number.isFinite(Number(data.prediction)) ? Number(data.prediction) : null,
+    confidence: data.confidence || null,
+    recommendation: data.recommendation || null,
+    reasoning: data.reasoning || null,
+    period_days: Number.isFinite(Number(data.periodDays)) ? Number(data.periodDays) : null,
+    input_json: safeJson(data.input),
+    output_json: safeJson(data.output),
+  });
+
+  await auditEvent({
+    eventId: `ai_${decisionId}`,
+    action: "ai_decision_logged",
+    entityType: "ai_decision",
+    entityId: decisionId,
+    facilityId: data.facilityId,
+    medicineName: data.medicineName,
+    after: data,
+    actorId: context.auth.uid,
+  });
+
+  return { ok: true, decisionId };
+});
+
+/**
+ * 1c. Firestore -> BigQuery mirrors for analytics, transfer decisions, and audit.
+ */
+exports.mirrorRequestToBigQuery = functions.firestore
+  .document("requests/{requestId}")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    const requestId = context.params.requestId;
+    const rowData = after || before || {};
+    const action = !before && after ? "created" : before && after ? "updated" : "deleted";
+
+    await insertBigQuery("transfer_requests", {
+      request_id: requestId,
+      facility_id: rowData.facilityId || null,
+      medicine_name: rowData.medicineName || null,
+      request_type: rowData.type || null,
+      quantity: Number(rowData.quantity || 0),
+      status: after ? rowData.status || null : "deleted",
+      request_date: toIsoTimestamp(rowData.requestDate),
+      notes: rowData.notes || null,
+      captured_at: new Date().toISOString(),
+      payload_json: safeJson(rowData),
+    });
+
+    await auditEvent({
+      eventId: `request_${requestId}_${Date.now()}`,
+      action: `request_${action}`,
+      entityType: "request",
+      entityId: requestId,
+      before,
+      after,
+      facilityId: rowData.facilityId,
+      medicineName: rowData.medicineName,
+    });
+
+    if (after?.notes && String(after.notes).toLowerCase().includes("ai predicted")) {
+      await insertBigQuery("ai_decisions", {
+        decision_id: `request_${requestId}_${Date.now()}`,
+        occurred_at: new Date().toISOString(),
+        facility_id: after.facilityId || null,
+        medicine_name: after.medicineName || null,
+        decision_type: after.type === "surplus" ? "redistribution_recommendation" : "restock_recommendation",
+        model: "mediflow_stock_analysis",
+        prediction: null,
+        confidence: null,
+        recommendation: after.type || null,
+        reasoning: after.notes || null,
+        period_days: null,
+        input_json: null,
+        output_json: safeJson(after),
+      });
+    }
+  });
+
+exports.mirrorInventoryToBigQuery = functions.firestore
+  .document("inventory/{facilityId}/medicines/{medicineId}")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    const data = after || before || {};
+    const facilityId = context.params.facilityId;
+    const medicineId = context.params.medicineId;
+    const initial = Number(data.initialQuantity || 0);
+    const remaining = Number(data.remainingQuantity || 0);
+    const action = !before && after ? "created" : before && after ? "updated" : "deleted";
+
+    await insertBigQuery("inventory_snapshots", {
+      snapshot_id: `${facilityId}_${medicineId}_${Date.now()}`,
+      facility_id: facilityId,
+      medicine_id: medicineId,
+      medicine_name: data.medicineName || null,
+      batch_id: data.batchId || null,
+      initial_quantity: initial,
+      remaining_quantity: remaining,
+      unit: data.unit || null,
+      expiry_date: toBigQueryDate(data.expiryDate),
+      arrival_date: toBigQueryDate(data.arrivalDate),
+      stock_pct: initial > 0 ? remaining / initial : null,
+      status: after ? stockStatus(data) : "deleted",
+      captured_at: new Date().toISOString(),
+      payload_json: safeJson(data),
+    });
+
+    await auditEvent({
+      eventId: `inventory_${facilityId}_${medicineId}_${Date.now()}`,
+      action: `inventory_${action}`,
+      entityType: "inventory",
+      entityId: medicineId,
+      before,
+      after,
+      facilityId,
+      medicineName: data.medicineName,
+    });
+  });
+
+exports.mirrorUsageLogToBigQuery = functions.firestore
+  .document("daily_usage_logs/{facilityId}/logs/{logId}")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    const data = after || before || {};
+    const facilityId = context.params.facilityId;
+    const logId = context.params.logId;
+    const medicines = Array.isArray(data.medicines) ? data.medicines : [];
+    const action = !before && after ? "created" : before && after ? "updated" : "deleted";
+
+    await insertBigQuery("usage_analytics", medicines.map((medicine, index) => ({
+      usage_id: `${facilityId}_${logId}_${index}_${Date.now()}`,
+      facility_id: facilityId,
+      log_id: logId,
+      usage_date: toBigQueryDate(data.date),
+      medicine_name: medicine.medicineName || null,
+      units_distributed: Number(medicine.unitsDistributed || 0),
+      total_patients: Number(data.totalPatients || 0),
+      captured_at: new Date().toISOString(),
+      payload_json: safeJson(data),
+    })));
+
+    await auditEvent({
+      eventId: `usage_${facilityId}_${logId}_${Date.now()}`,
+      action: `usage_log_${action}`,
+      entityType: "daily_usage_log",
+      entityId: logId,
+      before,
+      after,
+      facilityId,
+    });
+  });
 
 /**
  * 2. checkLowStock() - Scheduled daily CRON

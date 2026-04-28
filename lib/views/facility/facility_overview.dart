@@ -22,8 +22,11 @@ class FacilityOverview extends ConsumerWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final inventory = snapshot.data ?? [];
-        final expiringSoon = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays < 90).length;
-        final lowStock = inventory.where((i) => i.remainingQuantity < (i.initialQuantity * 0.35)).length;
+        final expiringSoon = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays <= 30).length;
+        final lowStock = inventory.where((i) {
+          final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
+          return pct <= 0.20 || i.remainingQuantity <= 500;
+        }).length;
 
         String lastDelivery = 'No data';
         if (inventory.isNotEmpty) {
@@ -62,8 +65,11 @@ class FacilityOverview extends ConsumerWidget {
                     const PopupMenuItem<String>(value: 'h', enabled: false, child: Text('Live Alerts', style: TextStyle(fontWeight: FontWeight.w700, color: MediColors.textPrimary))),
                     const PopupMenuDivider(),
                   ];
-                  final lowItems = inventory.where((i) => i.remainingQuantity < (i.initialQuantity * 0.15)).toList();
-                  final expiringItems = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays < 90).toList();
+                  final lowItems = inventory.where((i) {
+                    final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
+                    return pct <= 0.20 || i.remainingQuantity <= 500;
+                  }).toList();
+                  final expiringItems = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays <= 30).toList();
                   for (var item in lowItems) {
                     alerts.add(PopupMenuItem<String>(value: 'l_${item.medicineName}', child: ListTile(
                       leading: const Icon(Icons.warning_rounded, color: MediColors.error, size: 20),
@@ -83,9 +89,10 @@ class FacilityOverview extends ConsumerWidget {
                   }
                   for (var item in expiringItems) {
                     final d = item.expiryDate.difference(DateTime.now()).inDays;
+                    final isExpired = d < 0;
                     alerts.add(PopupMenuItem<String>(value: 'e_${item.medicineName}', child: ListTile(
-                      leading: const Icon(Icons.schedule_rounded, color: MediColors.warning, size: 20),
-                      title: Text('${item.medicineName} expires in $d d', style: const TextStyle(fontSize: 13, color: MediColors.textPrimary)),
+                      leading: Icon(isExpired ? Icons.error_outline_rounded : Icons.schedule_rounded, color: isExpired ? MediColors.error : MediColors.warning, size: 20),
+                      title: Text(isExpired ? '${item.medicineName} has EXPIRED' : '${item.medicineName} expires in $d d', style: const TextStyle(fontSize: 13, color: MediColors.textPrimary)),
                       dense: true, contentPadding: EdgeInsets.zero,
                     )));
                   }
@@ -159,19 +166,45 @@ class FacilityOverview extends ConsumerWidget {
                 const SizedBox(height: 28),
 
                 // KPI Cards
-                Wrap(
-                  spacing: 20,
-                  runSpacing: 20,
-                  children: [
-                    _buildKpiCard('Total Medicines', '${inventory.length}', Icons.medication_rounded, MediColors.info, const LinearGradient(colors: [Color(0xFF1E3A5F), Color(0xFF1E293B)]), () {}),
-                    _buildKpiCard('Expiring Soon', '$expiringSoon', Icons.hourglass_bottom_rounded, MediColors.warning, const LinearGradient(colors: [Color(0xFF3D2E0A), Color(0xFF1E293B)]), () {
-                      context.go('/facility/$facilityId/alerts');
-                    }),
-                    _buildKpiCard('Low Stock', '$lowStock', Icons.trending_down_rounded, MediColors.error, const LinearGradient(colors: [Color(0xFF3D1519), Color(0xFF1E293B)]), () {
-                      context.go('/facility/$facilityId/alerts');
-                    }),
-                    _buildKpiCard('Last Delivery', lastDelivery, Icons.local_shipping_rounded, MediColors.success, const LinearGradient(colors: [Color(0xFF0A3D2E), Color(0xFF1E293B)]), () {}),
-                  ],
+                Builder(
+                  builder: (context) {
+                    final expired = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays < 0).length;
+                    final wastageRisk = inventory.where((i) {
+                      final pct = i.initialQuantity > 0 ? (i.remainingQuantity / i.initialQuantity) : 1.0;
+                      return pct >= 0.70 && i.expiryDate.difference(DateTime.now()).inDays <= 30;
+                    }).length;
+                    final unhealthy = inventory.where((i) {
+                      final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
+                      final daysLeft = i.expiryDate.difference(DateTime.now()).inDays;
+                      return daysLeft < 0 || daysLeft <= 30 || pct >= 0.70 && daysLeft <= 30 || pct <= 0.20 || i.remainingQuantity <= 500;
+                    }).length;
+                    final healthy = (inventory.length - unhealthy).clamp(0, inventory.length);
+                    final stockHealthText = inventory.isEmpty ? 'No stock' : '$healthy / ${inventory.length} healthy';
+                    final stockHealthColor = unhealthy == 0 ? MediColors.success : MediColors.warning;
+                    final stockHealthGradient = unhealthy == 0
+                        ? const LinearGradient(colors: [Color(0xFF0A3D2E), Color(0xFF1E293B)])
+                        : const LinearGradient(colors: [Color(0xFF3D2E0A), Color(0xFF1E293B)]);
+
+                    return Wrap(
+                      spacing: 20,
+                      runSpacing: 20,
+                      children: [
+                        _buildKpiCard('Total Meds in Inv', '${inventory.length}', Icons.medication_rounded, MediColors.info, const LinearGradient(colors: [Color(0xFF1E3A5F), Color(0xFF1E293B)]), () {}),
+                        _buildKpiCard('Stock Health', stockHealthText, Icons.health_and_safety_rounded, stockHealthColor, stockHealthGradient, () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                        _buildKpiCard('Expired', '$expired', Icons.error_outline_rounded, MediColors.error, const LinearGradient(colors: [Color(0xFF3D1519), Color(0xFF1E293B)]), () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                        _buildKpiCard('Wastage Risk', '$wastageRisk', Icons.warning_amber_rounded, const Color(0xFFF59E0B), const LinearGradient(colors: [Color(0xFF3D2E0A), Color(0xFF1E293B)]), () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                        _buildKpiCard('Low Stock', '$lowStock', Icons.trending_down_rounded, MediColors.error, const LinearGradient(colors: [Color(0xFF3D1519), Color(0xFF1E293B)]), () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 36),
                 _buildInventoryTable(context, inventory),
@@ -247,16 +280,27 @@ class FacilityOverview extends ConsumerWidget {
                       DataColumn(label: Text('Medicine')),
                       DataColumn(label: Text('Quantity')),
                       DataColumn(label: Text('Status')),
-                      DataColumn(label: Text('Expiry')),
+                      DataColumn(label: Text('Expiry Date')),
+                      DataColumn(label: Text('Time Left')),
                     ],
                     rows: inventory.map((item) {
                       final pct = item.initialQuantity > 0 ? (item.remainingQuantity / item.initialQuantity) : 1.0;
                       final daysToExpiry = item.expiryDate.difference(DateTime.now()).inDays;
                       Color statusColor;
                       String statusText;
-                      if (pct <= 0.15) { statusColor = MediColors.error; statusText = 'Critical'; }
-                      else if (pct <= 0.35) { statusColor = MediColors.warning; statusText = 'Low'; }
-                      else { statusColor = MediColors.success; statusText = 'Healthy'; }
+                      if (daysToExpiry < 0) {
+                        statusColor = MediColors.error;
+                        statusText = 'Expired';
+                      } else if (pct >= 0.70 && daysToExpiry <= 30) {
+                        statusColor = const Color(0xFFF59E0B); // Amber
+                        statusText = 'Wastage Risk';
+                      } else if (pct <= 0.20 || item.remainingQuantity <= 500) {
+                        statusColor = MediColors.error;
+                        statusText = 'Low Stock';
+                      } else {
+                        statusColor = MediColors.success;
+                        statusText = 'Healthy';
+                      }
 
                       return DataRow(cells: [
                         DataCell(Row(children: [
@@ -291,8 +335,23 @@ class FacilityOverview extends ConsumerWidget {
                           child: Text(statusText, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600)),
                         )),
                         DataCell(Text(
-                          daysToExpiry > 365 ? '${(daysToExpiry / 365).toStringAsFixed(1)} yr' : '$daysToExpiry days',
-                          style: TextStyle(color: daysToExpiry < 90 ? MediColors.warning : MediColors.textSecondary),
+                          "${item.expiryDate.year}-${item.expiryDate.month.toString().padLeft(2, '0')}-${item.expiryDate.day.toString().padLeft(2, '0')}",
+                          style: const TextStyle(color: MediColors.textSecondary),
+                        )),
+                        DataCell(Text(
+                          daysToExpiry < 0
+                              ? 'Expired'
+                              : daysToExpiry > 365
+                                  ? '${(daysToExpiry / 365).toStringAsFixed(1)} yr'
+                                  : '$daysToExpiry days',
+                          style: TextStyle(
+                              color: daysToExpiry < 0
+                                  ? MediColors.error
+                                  : daysToExpiry < 90
+                                      ? MediColors.warning
+                                      : MediColors.textSecondary,
+                              fontWeight: daysToExpiry < 0 ? FontWeight.bold : FontWeight.normal,
+                          ),
                         )),
                       ]);
                     }).toList(),

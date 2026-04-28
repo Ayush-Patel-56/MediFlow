@@ -611,7 +611,7 @@ Location: (${data['latitude']}, ${data['longitude']})
       }
     }
 
-    response += '\n💡 _Create indent requests to initiate transfers._';
+    response += '\n💡 _Use AI Stock Analysis to prepare restock or redistribution requests._';
     return response;
   }
 

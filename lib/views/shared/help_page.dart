@@ -39,7 +39,7 @@ class HelpPage extends StatelessWidget {
             ] else ...[
               _buildStep(context, '01', 'Daily Logging', 'Record distributed medicines. Clean data fuels the AI forecasting engine.', Icons.edit_calendar_rounded),
               _buildStep(context, '02', 'AI Forecast', 'Predict future stock needs. Gemini AI analyzes your usage patterns.', Icons.auto_graph_rounded),
-              _buildStep(context, '03', 'Create Indents', 'Request supplies when stock is low. AI suggests optimal quantities.', Icons.receipt_long_rounded),
+              _buildStep(context, '03', 'AI Stock Analysis', 'AI analyzes your inventory health — flags low stock, expired & surplus medicines, and prepares restock or redistribution requests.', Icons.receipt_long_rounded),
             ],
             const SizedBox(height: 36),
             // Tip card
