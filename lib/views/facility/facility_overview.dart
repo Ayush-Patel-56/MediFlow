@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/inventory_item.dart';
 import '../../services/firebase_service.dart';
-import 'package:intl/intl.dart';
+import '../../services/simulation_service.dart';
+import 'package:med_supply_prototype/constants/colors.dart';
 
 class FacilityOverview extends ConsumerWidget {
   final String facilityId;
@@ -14,225 +15,350 @@ class FacilityOverview extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final inventoryStream = ref.watch(firebaseServiceProvider).streamInventory(facilityId);
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Facility Overview', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.notifications_none, color: Colors.black87),
-            tooltip: 'View Alerts',
-            itemBuilder: (context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(value: 'header', enabled: false, child: Text('Recent Notifications', style: TextStyle(fontWeight: FontWeight.bold))),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(value: 'low_stock', child: ListTile(leading: Icon(Icons.warning, color: Colors.orange), title: Text('Antibiotic stock low!'), dense: true, contentPadding: EdgeInsets.zero)),
-              const PopupMenuItem<String>(value: 'delivery', child: ListTile(leading: Icon(Icons.local_shipping, color: Colors.green), title: Text('Delivery expected in 2 days'), dense: true, contentPadding: EdgeInsets.zero)),
-            ],
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Profile Settings',
-            child: const Padding(
-              padding: EdgeInsets.only(left: 8.0, right: 16.0),
-              child: CircleAvatar(child: Icon(Icons.person, color: Colors.white), backgroundColor: Colors.teal),
-            ),
-            itemBuilder: (context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(value: 'header', enabled: false, child: Text('Account Settings', style: TextStyle(fontWeight: FontWeight.bold))),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(value: 'profile', child: ListTile(leading: Icon(Icons.manage_accounts), title: Text('Profile'), dense: true, contentPadding: EdgeInsets.zero)),
-              const PopupMenuItem<String>(value: 'security', child: ListTile(leading: Icon(Icons.security), title: Text('Security'), dense: true, contentPadding: EdgeInsets.zero)),
-              const PopupMenuItem<String>(value: 'theme', child: ListTile(leading: Icon(Icons.color_lens), title: Text('Theme Preferences'), dense: true, contentPadding: EdgeInsets.zero)),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(value: 'signout', child: ListTile(leading: Icon(Icons.logout, color: Colors.red), title: Text('Sign Out', style: TextStyle(color: Colors.red)), dense: true, contentPadding: EdgeInsets.zero)),
-            ],
-            onSelected: (value) async {
-              if (value == 'signout') {
-                if (context.mounted) context.go('/');
-                await FirebaseAuth.instance.signOut();
-              } else if (value != 'header') {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${value[0].toUpperCase()}${value.substring(1)} settings coming in a future update.')),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      body: StreamBuilder<List<InventoryItem>>(
-        stream: inventoryStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final inventory = snapshot.data ?? [];
-          final expiringSoon = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays < 90).length;
-          final lowStock = inventory.where((i) => i.remainingQuantity < (i.initialQuantity * 0.15)).length;
+    return StreamBuilder<List<InventoryItem>>(
+      stream: inventoryStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final inventory = snapshot.data ?? [];
+        final expiringSoon = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays <= 30).length;
+        final lowStock = inventory.where((i) {
+          final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
+          return pct <= 0.20 || i.remainingQuantity <= 500;
+        }).length;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // KPI Cards
-                Wrap(
-                  spacing: 24,
-                  runSpacing: 24,
+        String lastDelivery = 'No data';
+        if (inventory.isNotEmpty) {
+          final sorted = [...inventory]..sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
+          final daysAgo = DateTime.now().difference(sorted.first.arrivalDate).inDays;
+          if (daysAgo == 0) lastDelivery = 'Today';
+          else if (daysAgo == 1) lastDelivery = 'Yesterday';
+          else lastDelivery = '$daysAgo Days Ago';
+        }
+
+        return Scaffold(
+          backgroundColor: MediColors.bg,
+          appBar: AppBar(
+            title: const Text('Dashboard'),
+            actions: [
+              // Live Alert Bell
+              PopupMenuButton<String>(
+                icon: Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    _buildKpiCard(context, 'Total Medicines', inventory.length.toString(), Icons.medication, Colors.blue),
-                    _buildKpiCard(context, 'Expiring Soon', expiringSoon.toString(), Icons.warning, Colors.orange),
-                    _buildKpiCard(context, 'Low Stock Alerts', lowStock.toString(), Icons.error, Colors.red),
-                    _buildKpiCard(context, 'Last Delivery', '2 Days Ago', Icons.local_shipping, Colors.green),
+                    const Icon(Icons.notifications_outlined, color: MediColors.textSecondary),
+                    if (lowStock + expiringSoon > 0)
+                      Positioned(
+                        top: -2, right: -2,
+                        child: Container(
+                          width: 16, height: 16,
+                          decoration: const BoxDecoration(color: MediColors.error, shape: BoxShape.circle),
+                          child: Center(child: Text('${lowStock + expiringSoon}', style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700))),
+                        ),
+                      ),
                   ],
                 ),
-                const SizedBox(height: 48),
-                _buildInventorySections(context, inventory),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildKpiCard(BuildContext context, String title, String value, IconData icon, Color color) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 200, maxWidth: 300),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 24),
+                tooltip: 'Alerts',
+                itemBuilder: (context) {
+                  final alerts = <PopupMenuEntry<String>>[
+                    const PopupMenuItem<String>(value: 'h', enabled: false, child: Text('Live Alerts', style: TextStyle(fontWeight: FontWeight.w700, color: MediColors.textPrimary))),
+                    const PopupMenuDivider(),
+                  ];
+                  final lowItems = inventory.where((i) {
+                    final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
+                    return pct <= 0.20 || i.remainingQuantity <= 500;
+                  }).toList();
+                  final expiringItems = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays <= 30).toList();
+                  for (var item in lowItems) {
+                    alerts.add(PopupMenuItem<String>(value: 'l_${item.medicineName}', child: ListTile(
+                      leading: const Icon(Icons.warning_rounded, color: MediColors.error, size: 20),
+                      title: Text('${item.medicineName} critically low', style: const TextStyle(fontSize: 13, color: MediColors.textPrimary)),
+                      subtitle: Text('${item.remainingQuantity} units left', style: const TextStyle(fontSize: 11, color: MediColors.textMuted)),
+                      trailing: TextButton(
+                        onPressed: () async {
+                          await ref.read(firebaseServiceProvider).restock(facilityId, item.medicineName, 500);
+                          if (context.mounted) {
+                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restocked 500 units of ${item.medicineName}')));
+                          }
+                        },
+                        child: const Text('Restock', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: MediColors.primary)),
+                      ),
+                      dense: true, contentPadding: EdgeInsets.zero,
+                    )));
+                  }
+                  for (var item in expiringItems) {
+                    final d = item.expiryDate.difference(DateTime.now()).inDays;
+                    final isExpired = d < 0;
+                    alerts.add(PopupMenuItem<String>(value: 'e_${item.medicineName}', child: ListTile(
+                      leading: Icon(isExpired ? Icons.error_outline_rounded : Icons.schedule_rounded, color: isExpired ? MediColors.error : MediColors.warning, size: 20),
+                      title: Text(isExpired ? '${item.medicineName} has EXPIRED' : '${item.medicineName} expires in $d d', style: const TextStyle(fontSize: 13, color: MediColors.textPrimary)),
+                      dense: true, contentPadding: EdgeInsets.zero,
+                    )));
+                  }
+                  if (lowItems.isEmpty && expiringItems.isEmpty) {
+                    alerts.add(const PopupMenuItem<String>(value: 'ok', enabled: false, child: ListTile(
+                      leading: Icon(Icons.check_circle_rounded, color: MediColors.success, size: 20),
+                      title: Text('All systems healthy', style: TextStyle(fontSize: 13, color: MediColors.textSecondary)),
+                      dense: true, contentPadding: EdgeInsets.zero,
+                    )));
+                  }
+                  return alerts;
+                },
+              ),
+              const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                child: const Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: CircleAvatar(radius: 18, backgroundColor: MediColors.surfaceLight, child: Icon(Icons.person_rounded, color: MediColors.textSecondary, size: 20)),
+                ),
+                itemBuilder: (c) => [
+                  const PopupMenuItem(value: 'out', child: ListTile(leading: Icon(Icons.logout_rounded, color: MediColors.error), title: Text('Sign Out'), dense: true, contentPadding: EdgeInsets.zero)),
+                ],
+                onSelected: (v) async {
+                  if (v == 'out') { context.go('/'); await FirebaseAuth.instance.signOut(); }
+                },
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
-                const SizedBox(height: 2),
-                Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                // Greeting
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Facility Dashboard', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: MediColors.textPrimary)),
+                        const SizedBox(height: 4),
+                        Text('Real-time inventory monitoring and insights', style: const TextStyle(color: MediColors.textSecondary, fontSize: 14)),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final firebase = ref.read(firebaseServiceProvider);
+                        final fac = await firebase.getFacility(facilityId);
+                        if (fac != null) {
+                          // Show loading
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Simulating 30 days of usage data...')));
+                          }
+                          await ref.read(simulationServiceProvider).runFullSimulation(facilityId, fac.type);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Simulation complete! Analytics ready.')));
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.analytics_outlined),
+                      label: const Text('Simulate Analytics'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: MediColors.primary,
+                        side: const BorderSide(color: MediColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+
+                // KPI Cards
+                Builder(
+                  builder: (context) {
+                    final expired = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays < 0).length;
+                    final wastageRisk = inventory.where((i) {
+                      final pct = i.initialQuantity > 0 ? (i.remainingQuantity / i.initialQuantity) : 1.0;
+                      return pct >= 0.70 && i.expiryDate.difference(DateTime.now()).inDays <= 30;
+                    }).length;
+                    final unhealthy = inventory.where((i) {
+                      final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
+                      final daysLeft = i.expiryDate.difference(DateTime.now()).inDays;
+                      return daysLeft < 0 || daysLeft <= 30 || pct >= 0.70 && daysLeft <= 30 || pct <= 0.20 || i.remainingQuantity <= 500;
+                    }).length;
+                    final healthy = (inventory.length - unhealthy).clamp(0, inventory.length);
+                    final stockHealthText = inventory.isEmpty ? 'No stock' : '$healthy / ${inventory.length} healthy';
+                    final stockHealthColor = unhealthy == 0 ? MediColors.success : MediColors.warning;
+                    final stockHealthGradient = unhealthy == 0
+                        ? const LinearGradient(colors: [Color(0xFF0A3D2E), Color(0xFF1E293B)])
+                        : const LinearGradient(colors: [Color(0xFF3D2E0A), Color(0xFF1E293B)]);
+
+                    return Wrap(
+                      spacing: 20,
+                      runSpacing: 20,
+                      children: [
+                        _buildKpiCard('Total Meds in Inv', '${inventory.length}', Icons.medication_rounded, MediColors.info, const LinearGradient(colors: [Color(0xFF1E3A5F), Color(0xFF1E293B)]), () {}),
+                        _buildKpiCard('Stock Health', stockHealthText, Icons.health_and_safety_rounded, stockHealthColor, stockHealthGradient, () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                        _buildKpiCard('Expired', '$expired', Icons.error_outline_rounded, MediColors.error, const LinearGradient(colors: [Color(0xFF3D1519), Color(0xFF1E293B)]), () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                        _buildKpiCard('Wastage Risk', '$wastageRisk', Icons.warning_amber_rounded, const Color(0xFFF59E0B), const LinearGradient(colors: [Color(0xFF3D2E0A), Color(0xFF1E293B)]), () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                        _buildKpiCard('Low Stock', '$lowStock', Icons.trending_down_rounded, MediColors.error, const LinearGradient(colors: [Color(0xFF3D1519), Color(0xFF1E293B)]), () {
+                          context.go('/facility/$facilityId/alerts');
+                        }),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 36),
+                _buildInventoryTable(context, inventory),
               ],
             ),
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _buildKpiCard(String title, String value, IconData icon, Color accent, LinearGradient bg, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 240,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          gradient: bg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: accent.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: accent, size: 22),
+            ),
+            const SizedBox(height: 18),
+            Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: accent)),
+            const SizedBox(height: 4),
+            Text(title, style: const TextStyle(fontSize: 13, color: MediColors.textSecondary)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildInventorySections(BuildContext context, List<InventoryItem> inventory) {
+  Widget _buildInventoryTable(BuildContext context, List<InventoryItem> inventory) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(context, 'Real-time Inventory', Icons.analytics),
+        const Text('Inventory Status', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
         const SizedBox(height: 16),
-        _buildCurrentInventoryTable(context, inventory),
-        const SizedBox(height: 48),
-        _buildSectionTitle(context, 'Initial Stock Received', Icons.inventory_2),
-        const SizedBox(height: 16),
-        _buildInitialStockTable(context, inventory),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: MediColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: MediColors.border),
+          ),
+          child: inventory.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(48),
+                  child: Center(
+                    child: Column(children: [
+                      Icon(Icons.inventory_2_outlined, size: 48, color: MediColors.textMuted),
+                      const SizedBox(height: 12),
+                      Text('No inventory items yet', style: TextStyle(color: MediColors.textMuted)),
+                    ]),
+                  ),
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: DataTable(
+                    columnSpacing: 28,
+                    columns: const [
+                      DataColumn(label: Text('Medicine')),
+                      DataColumn(label: Text('Quantity')),
+                      DataColumn(label: Text('Status')),
+                      DataColumn(label: Text('Expiry Date')),
+                      DataColumn(label: Text('Time Left')),
+                    ],
+                    rows: inventory.map((item) {
+                      final pct = item.initialQuantity > 0 ? (item.remainingQuantity / item.initialQuantity) : 1.0;
+                      final daysToExpiry = item.expiryDate.difference(DateTime.now()).inDays;
+                      Color statusColor;
+                      String statusText;
+                      if (daysToExpiry < 0) {
+                        statusColor = MediColors.error;
+                        statusText = 'Expired';
+                      } else if (pct >= 0.70 && daysToExpiry <= 30) {
+                        statusColor = const Color(0xFFF59E0B); // Amber
+                        statusText = 'Wastage Risk';
+                      } else if (pct <= 0.20 || item.remainingQuantity <= 500) {
+                        statusColor = MediColors.error;
+                        statusText = 'Low Stock';
+                      } else {
+                        statusColor = MediColors.success;
+                        statusText = 'Healthy';
+                      }
+
+                      return DataRow(cells: [
+                        DataCell(Row(children: [
+                          Container(width: 4, height: 32, decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(4))),
+                          const SizedBox(width: 12),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textPrimary)),
+                            Text(item.batchId, style: const TextStyle(fontSize: 11, color: MediColors.textMuted)),
+                          ]),
+                        ])),
+                        DataCell(Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${item.remainingQuantity} / ${item.initialQuantity}', style: const TextStyle(color: MediColors.textPrimary, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 4),
+                            SizedBox(
+                              width: 100,
+                              child: LinearProgressIndicator(
+                                value: pct,
+                                backgroundColor: MediColors.surfaceLight,
+                                color: statusColor,
+                                minHeight: 4,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        )),
+                        DataCell(Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                          child: Text(statusText, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                        )),
+                        DataCell(Text(
+                          "${item.expiryDate.year}-${item.expiryDate.month.toString().padLeft(2, '0')}-${item.expiryDate.day.toString().padLeft(2, '0')}",
+                          style: const TextStyle(color: MediColors.textSecondary),
+                        )),
+                        DataCell(Text(
+                          daysToExpiry < 0
+                              ? 'Expired'
+                              : daysToExpiry > 365
+                                  ? '${(daysToExpiry / 365).toStringAsFixed(1)} yr'
+                                  : '$daysToExpiry days',
+                          style: TextStyle(
+                              color: daysToExpiry < 0
+                                  ? MediColors.error
+                                  : daysToExpiry < 90
+                                      ? MediColors.warning
+                                      : MediColors.textSecondary,
+                              fontWeight: daysToExpiry < 0 ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        )),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+        ),
       ],
-    );
-  }
-
-  Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.blue[800], size: 28),
-        const SizedBox(width: 12),
-        Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.blue[900])),
-      ],
-    );
-  }
-
-  Widget _buildInitialStockTable(BuildContext context, List<InventoryItem> inventory) {
-    return _buildTableContainer(
-      DataTable(
-        headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
-        columns: const [
-          DataColumn(label: Text('Medicine Name')),
-          DataColumn(label: Text('Batch ID')),
-          DataColumn(label: Text('Initial Quantity')),
-          DataColumn(label: Text('Arrival Date')),
-        ],
-        rows: inventory.map((item) {
-          return DataRow(cells: [
-            DataCell(Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.bold))),
-            DataCell(Text(item.batchId)),
-            DataCell(Text(item.initialQuantity.toString())),
-            DataCell(Text(DateFormat('MMM dd, yyyy').format(item.arrivalDate))),
-          ]);
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildCurrentInventoryTable(BuildContext context, List<InventoryItem> inventory) {
-    return _buildTableContainer(
-      DataTable(
-        headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
-        columns: const [
-          DataColumn(label: Text('Medicine Name')),
-          DataColumn(label: Text('Remaining Stock')),
-          DataColumn(label: Text('Expiry Date')),
-          DataColumn(label: Text('Status')),
-        ],
-        rows: inventory.map((item) {
-          final isLow = item.remainingQuantity < (item.initialQuantity * 0.15);
-          final isExpiring = item.expiryDate.difference(DateTime.now()).inDays < 90;
-          
-          Widget statusBadge;
-          if (isLow) statusBadge = _buildBadge('Low Stock', Colors.red);
-          else if (isExpiring) statusBadge = _buildBadge('Expiring Soon', Colors.orange);
-          else statusBadge = _buildBadge('Healthy', Colors.green);
-
-          return DataRow(cells: [
-            DataCell(Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.bold))),
-            DataCell(Text(item.remainingQuantity.toString(), style: TextStyle(
-              color: isLow ? Colors.red : Colors.black,
-              fontWeight: isLow ? FontWeight.bold : FontWeight.normal,
-            ))),
-            DataCell(Text(DateFormat('MMM dd, yyyy').format(item.expiryDate))),
-            DataCell(statusBadge),
-          ]);
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTableContainer(Widget table) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: table,
-      ),
-    );
-  }
-
-  Widget _buildBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
     );
   }
 }

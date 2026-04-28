@@ -1,8 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/firebase_service.dart';
-import '../../services/ai_service.dart';
+import '../../models/inventory_item.dart';
+import 'package:med_supply_prototype/constants/colors.dart';
+import '../shared/ai_chat_page.dart';
+
+enum _AlertKind { expired, wastageRisk, expiringSoon, lowStock }
+
+class _InventoryAlert {
+  final InventoryItem item;
+  final _AlertKind kind;
+  final String title;
+  final String reason;
+  final String detail;
+  final Color color;
+  final IconData icon;
+
+  const _InventoryAlert({
+    required this.item,
+    required this.kind,
+    required this.title,
+    required this.reason,
+    required this.detail,
+    required this.color,
+    required this.icon,
+  });
+}
 
 class AlertsPage extends ConsumerStatefulWidget {
   final String facilityId;
@@ -13,192 +37,300 @@ class AlertsPage extends ConsumerStatefulWidget {
 }
 
 class _AlertsPageState extends ConsumerState<AlertsPage> {
+  List<_InventoryAlert> _alerts = [];
   bool _isLoading = true;
-  List<Map<String, dynamic>> _diagnosticAlerts = [];
-  DateTime? _lastFetchTime;
 
   @override
   void initState() {
     super.initState();
-    _fetchAlerts();
+    _loadAlerts();
   }
 
-  Future<void> _fetchAlerts() async {
+  Future<void> _loadAlerts() async {
     setState(() => _isLoading = true);
     try {
       final inventory = await ref.read(firebaseServiceProvider).getInventoryOnce(widget.facilityId);
-      final alerts = await ref.read(aiServiceProvider).generateSmartAlerts(inventory);
+      final alerts = inventory.expand(_alertsForItem).toList()
+        ..sort((a, b) => _priority(a).compareTo(_priority(b)));
       if (mounted) {
         setState(() {
-          _diagnosticAlerts = alerts;
+          _alerts = alerts;
           _isLoading = false;
-          _lastFetchTime = DateTime.now();
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _lastFetchTime = DateTime.now();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating alerts: $e')));
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading alerts: $e')));
       }
     }
   }
 
+  Iterable<_InventoryAlert> _alertsForItem(InventoryItem item) sync* {
+    final pct = item.initialQuantity > 0 ? item.remainingQuantity / item.initialQuantity : 0.0;
+    final percentText = '${(pct * 100).round()}%';
+    final daysLeft = item.expiryDate.difference(DateTime.now()).inDays;
+    final expiryText = daysLeft < 0 ? 'expired ${daysLeft.abs()} days ago' : 'expires in $daysLeft days';
+    final lowStock = _isLowStock(item, pct);
+
+    if (daysLeft < 0) {
+      yield _InventoryAlert(
+        item: item,
+        kind: _AlertKind.expired,
+        title: 'Expired',
+        reason: '${item.medicineName} has passed its expiry date and should not be issued.',
+        detail: '${item.remainingQuantity} ${item.unit} remaining; $expiryText.',
+        color: MediColors.error,
+        icon: Icons.error_rounded,
+      );
+      return;
+    }
+
+    if (lowStock) {
+      yield _InventoryAlert(
+        item: item,
+        kind: _AlertKind.lowStock,
+        title: 'Low Stock',
+        reason: '${item.medicineName} is below the low-stock threshold.',
+        detail: '${item.remainingQuantity} / ${item.initialQuantity} ${item.unit} left ($percentText); $expiryText.',
+        color: MediColors.error,
+        icon: Icons.trending_down_rounded,
+      );
+    }
+
+    if (pct >= 0.70 && daysLeft <= 30) {
+      yield _InventoryAlert(
+        item: item,
+        kind: _AlertKind.wastageRisk,
+        title: 'Wastage Risk',
+        reason: 'High remaining stock is close to expiry, so redistribution should be considered.',
+        detail: '${item.remainingQuantity} / ${item.initialQuantity} ${item.unit} left ($percentText); $expiryText.',
+        color: MediColors.warning,
+        icon: Icons.warning_amber_rounded,
+      );
+    } else if (daysLeft <= 30) {
+      yield _InventoryAlert(
+        item: item,
+        kind: _AlertKind.expiringSoon,
+        title: 'Expiring Soon',
+        reason: '${item.medicineName} is within the 30-day expiry window.',
+        detail: '${item.remainingQuantity} / ${item.initialQuantity} ${item.unit} left ($percentText); $expiryText.',
+        color: MediColors.warning,
+        icon: Icons.schedule_rounded,
+      );
+    }
+  }
+
+  bool _isLowStock(InventoryItem item, double pct) {
+    return pct <= 0.20 || item.remainingQuantity <= 500;
+  }
+
+  int _priority(_InventoryAlert alert) {
+    switch (alert.kind) {
+      case _AlertKind.expired:
+        return 0;
+      case _AlertKind.lowStock:
+        return 1;
+      case _AlertKind.wastageRisk:
+        return 2;
+      case _AlertKind.expiringSoon:
+        return 3;
+    }
+  }
+
+  Future<void> _handleDisposal(_InventoryAlert alert) async {
+    try {
+      await ref.read(firebaseServiceProvider).disposeInventory(widget.facilityId, alert.item.medicineName);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Marked ${alert.item.medicineName} for safe disposal.')));
+        _loadAlerts();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  void _openSmartAnalysis() {
+    context.go('/facility/${widget.facilityId}/indent');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final redCount = _diagnosticAlerts.where((a) => a['severity'] == 'red').length;
-    final orangeCount = _diagnosticAlerts.where((a) => a['severity'] == 'orange').length;
-    final lastUpdatedStr = _lastFetchTime != null
-        ? 'Last analyzed: ${DateFormat('MMM dd, HH:mm').format(_lastFetchTime!)}'
-        : '';
+    final expiredAlerts = _alerts.where((a) => a.kind == _AlertKind.expired).toList();
+    final stockAlerts = _alerts.where((a) => a.kind == _AlertKind.lowStock || a.kind == _AlertKind.wastageRisk).toList();
+    final expiryAlerts = _alerts.where((a) => a.kind == _AlertKind.expiringSoon).toList();
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: MediColors.bg,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        title: Row(
           children: [
-            const Text('AI Diagnostics & Alerts', style: TextStyle(fontWeight: FontWeight.bold)),
-            if (lastUpdatedStr.isNotEmpty)
-              Text(lastUpdatedStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.grey)),
+            const Text('Alerts', style: TextStyle(fontWeight: FontWeight.w800, color: MediColors.textPrimary)),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: MediColors.info.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                widget.facilityId.replaceAll('_', ' ').toUpperCase(),
+                style: const TextStyle(fontSize: 12, color: MediColors.info, fontWeight: FontWeight.w600),
+              ),
+            ),
           ],
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.blue),
-            onPressed: _fetchAlerts,
-          )
+            icon: const Icon(Icons.refresh_rounded, color: MediColors.textSecondary),
+            onPressed: _loadAlerts,
+            tooltip: 'Refresh',
+          ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const AIChatPage(role: "Facility Manager")));
+        },
+        backgroundColor: const Color(0xFF1E3A8A),
+        child: const Icon(Icons.auto_awesome, color: Colors.white),
+      ),
       body: _isLoading
-          ? const Center(child: Row(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(width: 16), Text("Gemini AI Analyzing Inventory...")]))
-          : ListView(
-              padding: const EdgeInsets.all(32),
-              children: [
-                // Severity Summary Row
-                if (_diagnosticAlerts.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      if (redCount > 0) _buildSeverityChip('$redCount Critical', Colors.red),
-                      if (redCount > 0 && orangeCount > 0) const SizedBox(width: 12),
-                      if (orangeCount > 0) _buildSeverityChip('$orangeCount Warnings', Colors.orange),
-                      if (redCount == 0 && orangeCount == 0) _buildSeverityChip('All Clear', Colors.green),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                ],
-                _buildAlertSection(
-                  context,
-                  'Active Logistics Diagnostics',
-                  Icons.psychology,
-                  Colors.blue,
-                  _diagnosticAlerts.map((alert) {
-                    final isRed = alert['severity'] == 'red';
-                    return _buildAlertCard(
-                      alert['title'] ?? 'Notice',
-                      alert['description'] ?? '',
-                      isRed ? Colors.red : Colors.orange,
-                    );
-                  }).toList(),
-                  showEmpty: _diagnosticAlerts.isEmpty,
-                ),
-                const SizedBox(height: 32),
-                _buildAlertSection(
-                  context,
-                  'AI Redistribution Suggestions',
-                  Icons.swap_horiz,
-                  Colors.indigo,
-                  [
-                    _buildAlertCard('Feature Offline', 'Automated redistribution optimization matching will be enabled in a future system pipeline.', Colors.indigo),
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (expiredAlerts.isNotEmpty) ...[
+                    _sectionHeader('Expired Medicines'),
+                    const SizedBox(height: 16),
+                    ...expiredAlerts.map(_buildAlertCard),
+                    const SizedBox(height: 32),
                   ],
-                ),
-              ],
+                  if (stockAlerts.isNotEmpty) ...[
+                    _sectionHeader('Stock Action Alerts'),
+                    const SizedBox(height: 16),
+                    ...stockAlerts.map(_buildAlertCard),
+                    const SizedBox(height: 32),
+                  ],
+                  if (expiryAlerts.isNotEmpty) ...[
+                    _sectionHeader('Expiry Watch'),
+                    const SizedBox(height: 16),
+                    ...expiryAlerts.map(_buildAlertCard),
+                  ],
+                  if (_alerts.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 96),
+                        child: Column(
+                          children: [
+                            Icon(Icons.check_circle_rounded, size: 64, color: MediColors.success.withValues(alpha: 0.8)),
+                            const SizedBox(height: 16),
+                            const Text('No active alerts detected.', style: TextStyle(color: MediColors.textSecondary, fontSize: 16)),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
     );
   }
 
-  Widget _buildSeverityChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(label.contains('Clear') ? Icons.check_circle : Icons.warning_amber, color: color, size: 16),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-        ],
-      ),
-    );
+  Widget _sectionHeader(String title) {
+    return Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: MediColors.textPrimary));
   }
 
-  Widget _buildAlertSection(BuildContext context, String title, IconData icon, Color color, List<Widget> children, {bool showEmpty = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 12),
-            Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (showEmpty) 
-           Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: const Text("All systems nominal. No critical shortages or dangerous expiries found in current inventory block.", style: TextStyle(color: Colors.green)))
-        else
-           ...children,
-      ],
-    );
-  }
+  Widget _buildAlertCard(_InventoryAlert alert) {
+    final isExpired = alert.kind == _AlertKind.expired;
 
-  Widget _buildAlertCard(String title, String message, Color color, {String? action}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8)],
+        color: MediColors.surfaceLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: alert.color.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: alert.color.withValues(alpha: 0.05),
+            blurRadius: 10,
+            spreadRadius: 1,
+          )
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(Icons.info_outline, color: color, size: 24),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: alert.color.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(alert.icon, color: alert.color, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    Text(alert.item.medicineName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: MediColors.textPrimary)),
+                    Text(alert.item.batchId, style: const TextStyle(fontSize: 12, color: MediColors.textMuted, fontWeight: FontWeight.w600)),
+                    _statusBadge(alert),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(alert.reason, style: const TextStyle(color: MediColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text(message, style: TextStyle(color: Colors.grey[700])),
-                if (action != null) ...[
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(foregroundColor: color, side: BorderSide(color: color)),
-                    onPressed: () {},
-                    child: Text(action),
-                  ),
-                ]
+                Text(alert.detail, style: const TextStyle(color: MediColors.textSecondary, fontSize: 14)),
+                const SizedBox(height: 16),
+                isExpired
+                    ? _buildActionButton('Mark for Disposal', alert.color, () => _handleDisposal(alert))
+                    : _buildActionButton('Run Smart AI Stock Analysis', MediColors.primary, _openSmartAnalysis),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _statusBadge(_InventoryAlert alert) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: alert.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        alert.title,
+        style: TextStyle(color: alert.color, fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(String text, Color accentColor, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: accentColor.withValues(alpha: 0.5)),
+          color: accentColor.withValues(alpha: 0.08),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(color: accentColor, fontSize: 13, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }

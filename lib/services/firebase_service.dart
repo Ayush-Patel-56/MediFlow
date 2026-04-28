@@ -31,41 +31,41 @@ class FirebaseService {
     required String name,
     required String email,
     required String password,
-    String? type, // 'rural' or 'urban'
+    String? type,
+    double? fixedLat,
+    double? fixedLng,
+    String? fixedRegion,
   }) async {
-    String facilityId;
+    // 1. Generate a deterministic ID from email to bypass Auth dependency
+    // This ensures Firestore docs are created even if Auth rate limits hit.
+    final String facilityId = email.toLowerCase().replaceAll('@', '_').replaceAll('.', '_');
+    
+    // 2. Try to create Auth User in background (Non-blocking for data seeding)
     try {
-      // 1. Create Auth User
-      final credential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-      facilityId = credential.user!.uid;
-    } on auth.FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        // If user exists, sign in to get the UID
-        final credential = await _auth.signInWithEmailAndPassword(email: email, password: password);
-        facilityId = credential.user!.uid;
-      } else {
-        rethrow;
-      }
+      await _auth.createUserWithEmailAndPassword(email: email, password: password);
+    } catch (e) {
+      // If user exists or rate limit hits, we don't care for seeding Firestore data
+      print('Auth skip/fail for $email: $e');
     }
 
-    // 2. Generate Profile
+    // 3. Generate Profile
     final profile = _simulation.generateRealisticProfile(type: type);
     
-    // 3. Create Facility Document
+    // 4. Create Facility Document
     final facility = Facility(
       id: facilityId,
       name: name,
       email: email,
-      type: profile['type'],
-      region: profile['region'],
-      latitude: profile['latitude'],
-      longitude: profile['longitude'],
+      type: type ?? profile['type'],
+      region: fixedRegion ?? profile['region'],
+      latitude: fixedLat ?? profile['latitude'],
+      longitude: fixedLng ?? profile['longitude'],
       createdAt: (profile['createdAt'] as Timestamp).toDate(),
     );
 
     await _firestore.collection('facilities').doc(facilityId).set(facility.toMap());
 
-    // 4. Run Initial Simulation (120 days)
+    // 5. Run Initial Simulation (30 days)
     await _simulation.runFullSimulation(facilityId, facility.type);
   }
 
@@ -98,6 +98,37 @@ class FirebaseService {
         .collection('medicines')
         .get();
     return snapshot.docs.map((doc) => InventoryItem.fromMap(doc.data(), doc.id)).toList();
+  }
+
+  Stream<List<InventoryItem>> streamAllMedicines() {
+    return _firestore.collectionGroup('medicines').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        // Path is inventory/{facilityId}/medicines/{medicineId}
+        final pathSegments = doc.reference.path.split('/');
+        final facId = pathSegments.length >= 2 ? pathSegments[1] : '';
+        return InventoryItem.fromMap(doc.data(), doc.id, facilityId: facId);
+      }).toList();
+    });
+  }
+
+  Future<void> restock(String facilityId, String medicineName, int quantity) async {
+    final medicineId = medicineName.toLowerCase().replaceAll(' ', '_');
+    final invRef = _firestore
+        .collection('inventory')
+        .doc(facilityId)
+        .collection('medicines')
+        .doc(medicineId);
+
+    await _firestore.runTransaction((transaction) async {
+      final invDoc = await transaction.get(invRef);
+      if (invDoc.exists) {
+        int current = invDoc.data()?['remainingQuantity'] ?? 0;
+        transaction.update(invRef, {
+          'remainingQuantity': current + quantity,
+          'lastUpdated': Timestamp.now(),
+        });
+      }
+    });
   }
 
   // --- DAILY USAGE LOGS ---
@@ -201,6 +232,41 @@ class FirebaseService {
     await _firestore.collection('requests').add(request.toMap());
   }
 
+  Future<void> updateRequestStatus(String requestId, RequestStatus status) async {
+    await _firestore.collection('requests').doc(requestId).update({
+      'status': status.name,
+    });
+  }
+
+  Future<void> updateRequestQuantity(String requestId, int quantity) async {
+    await _firestore.collection('requests').doc(requestId).update({
+      'quantity': quantity,
+    });
+  }
+
+  Future<void> deleteRequest(String requestId) async {
+    await _firestore.collection('requests').doc(requestId).delete();
+  }
+
+  Future<void> disposeInventory(String facilityId, String medicineName) async {
+    final medicineId = medicineName.toLowerCase().replaceAll(' ', '_');
+    final invRef = _firestore
+        .collection('inventory')
+        .doc(facilityId)
+        .collection('medicines')
+        .doc(medicineId);
+
+    await _firestore.runTransaction((transaction) async {
+      final invDoc = await transaction.get(invRef);
+      if (invDoc.exists) {
+        transaction.update(invRef, {
+          'remainingQuantity': 0,
+          'lastUpdated': Timestamp.now(),
+        });
+      }
+    });
+  }
+
   // --- CLEANUP & SEEDING ---
 
   Future<void> clearDatabase() async {
@@ -239,45 +305,116 @@ class FirebaseService {
     }
   }
   
-  Future<void> seedDemoData() async {
-    // 1. Clear old data to avoid duplicates and schema conflicts
-    await clearDatabase();
-
-    // 2. Seed Admin
+  Future<String?> seedDemoData() async {
     try {
-      await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
-    } catch (e) {
-      // Ignore if exists
-    }
+      // 1. Clear old data to avoid duplicates and schema conflicts
+      await clearDatabase();
 
-    // 3. Seed new facilities
-    final List<Map<String, String>> demoFacilities = [
-      {'name': 'Delhi Central Hospital', 'type': 'urban', 'email': 'delhi@mediflow.com', 'password': 'delhi@123'},
-      {'name': 'Sonipat Rural Clinic', 'type': 'rural', 'email': 'sonipat@mediflow.com', 'password': 'sonipat@123'},
-    ];
-
-    for (var f in demoFacilities) {
+      // 2. Seed Admin
       try {
-        await signUpFacility(
-          name: f['name']!,
-          email: f['email']!,
-          password: f['password']!,
-          type: f['type'],
-        );
+        await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
       } catch (e) {
-        print('Error seeding $f: $e');
+        // Ignore if exists
       }
-    }
 
-    // 3. Seed Admin User
-    try {
-      await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
-    } catch (e) {
-      if (e is auth.FirebaseAuthException && e.code == 'email-already-in-use') {
-        // Admin already seeded
-      } else {
-        print('Error seeding admin: $e');
+      // 3. Seed new facilities
+      final List<Map<String, dynamic>> demoFacilities = [
+        {'name': 'PHC Rampur', 'type': 'rural', 'email': 'rampur@mediflow.com', 'password': 'password123', 'region': 'North District', 'lat': 28.6139, 'lng': 77.2090},
+        {'name': 'CHC Modinagar', 'type': 'urban', 'email': 'modinagar@mediflow.com', 'password': 'password123', 'region': 'East Zone', 'lat': 28.6500, 'lng': 77.3000},
+        {'name': 'PHC Loni', 'type': 'urban', 'email': 'loni@mediflow.com', 'password': 'password123', 'region': 'North District', 'lat': 28.7000, 'lng': 77.2800},
+        {'name': 'DH Ghaziabad', 'type': 'urban', 'email': 'ghaziabad@mediflow.com', 'password': 'password123', 'region': 'Central Hub', 'lat': 28.6600, 'lng': 77.4200},
+        {'name': 'PHC Bhojpur', 'type': 'rural', 'email': 'bhojpur@mediflow.com', 'password': 'password123', 'region': 'West Sector', 'lat': 28.7500, 'lng': 77.5000},
+        {'name': 'CHC Hapur', 'type': 'urban', 'email': 'hapur@mediflow.com', 'password': 'password123', 'region': 'East Zone', 'lat': 28.7200, 'lng': 77.7800},
+        {'name': 'PHC Dasna', 'type': 'rural', 'email': 'dasna@mediflow.com', 'password': 'password123', 'region': 'Central Hub', 'lat': 28.6800, 'lng': 77.5200},
+        {'name': 'SubCentre Pilkhuwa', 'type': 'rural', 'email': 'pilkhuwa@mediflow.com', 'password': 'password123', 'region': 'West Sector', 'lat': 28.7100, 'lng': 77.6500},
+      ];
+
+      for (var f in demoFacilities) {
+        try {
+          await signUpFacility(
+            name: f['name']!,
+            email: f['email']!,
+            password: f['password']!,
+            type: f['type'],
+            fixedLat: f['lat'],
+            fixedLng: f['lng'],
+            fixedRegion: f['region'],
+          );
+          // Delay to avoid auth rate limits
+          await Future.delayed(const Duration(milliseconds: 1500));
+        } catch (e) {
+          print('Error seeding $f: $e');
+          return 'Failed at ${f['name']}: $e';
+        }
       }
+
+      // 4. Seed sample requests for Admin Dashboard KPIs & Route Optimization
+      final String f1Id = demoFacilities[0]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Rampur (Rural)
+      final String f2Id = demoFacilities[1]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Modinagar (Urban)
+      final String f3Id = demoFacilities[2]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Loni (Urban)
+      final String f4Id = demoFacilities[3]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Ghaziabad (Urban)
+      final String f5Id = demoFacilities[4]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Bhojpur (Rural)
+      
+      // Match 1: ORS (Rampur Rural Needs, Modinagar Urban Surplus)
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f1Id, 
+        medicineName: 'ORS', 
+        type: RequestType.regularIndent, 
+        quantity: 800, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.pending,
+        notes: 'Critical shortage predicted by AI for summer spike.'
+      ));
+
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f2Id, 
+        medicineName: 'ORS', 
+        type: RequestType.surplus, 
+        quantity: 1000, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.pending,
+        notes: 'Excess stock identified. Available for redistribution.'
+      ));
+
+      // Match 2: Antibiotics (Bhojpur Rural Needs, Ghaziabad Urban Surplus)
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f5Id, 
+        medicineName: 'Antibiotic', 
+        type: RequestType.shortage, 
+        quantity: 300, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.approved,
+        notes: 'Post-monsoon surge in infections.'
+      ));
+
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f4Id, 
+        medicineName: 'Antibiotic', 
+        type: RequestType.surplus, 
+        quantity: 500, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.pending,
+        notes: 'Surplus stock optimization.'
+      ));
+
+      // Unmatched: Paracetamol (Just for variety)
+      await addRequest(MedRequest(
+        id: '', 
+        facilityId: f3Id, 
+        medicineName: 'Paracetamol', 
+        type: RequestType.regularIndent, 
+        quantity: 1200, 
+        requestDate: DateTime.now(), 
+        status: RequestStatus.pending,
+      ));
+
+      return null; // Success
+    } catch (e) {
+      return 'Critical error: $e';
     }
   }
 }

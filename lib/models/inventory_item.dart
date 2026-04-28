@@ -8,7 +8,9 @@ class InventoryItem {
   final DateTime expiryDate;
   final int initialQuantity;
   final int remainingQuantity;
+  final String unit;
   final DateTime lastUpdated;
+  final String? facilityId; // Added for global sync
 
   InventoryItem({
     required this.id,
@@ -18,10 +20,12 @@ class InventoryItem {
     required this.expiryDate,
     required this.initialQuantity,
     required this.remainingQuantity,
+    required this.unit,
     required this.lastUpdated,
+    this.facilityId,
   });
 
-  factory InventoryItem.fromMap(Map<String, dynamic> map, String id) {
+  factory InventoryItem.fromMap(Map<String, dynamic> map, String id, {String? facilityId}) {
     return InventoryItem(
       id: id,
       medicineName: map['medicineName'] ?? '',
@@ -30,9 +34,11 @@ class InventoryItem {
       expiryDate: (map['expiryDate'] as Timestamp).toDate(),
       initialQuantity: map['initialQuantity']?.toInt() ?? 0,
       remainingQuantity: map['remainingQuantity']?.toInt() ?? 0,
+      unit: map['unit'] ?? 'units',
       lastUpdated: map['lastUpdated'] != null 
           ? (map['lastUpdated'] as Timestamp).toDate() 
           : DateTime.now(),
+      facilityId: facilityId ?? map['facilityId'],
     );
   }
 
@@ -44,7 +50,9 @@ class InventoryItem {
       'expiryDate': Timestamp.fromDate(expiryDate),
       'initialQuantity': initialQuantity,
       'remainingQuantity': remainingQuantity,
+      'unit': unit,
       'lastUpdated': Timestamp.fromDate(lastUpdated),
+      if (facilityId != null) 'facilityId': facilityId,
     };
   }
 }
