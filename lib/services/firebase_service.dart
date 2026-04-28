@@ -100,6 +100,37 @@ class FirebaseService {
     return snapshot.docs.map((doc) => InventoryItem.fromMap(doc.data(), doc.id)).toList();
   }
 
+  Stream<List<InventoryItem>> streamAllMedicines() {
+    return _firestore.collectionGroup('medicines').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        // Path is inventory/{facilityId}/medicines/{medicineId}
+        final pathSegments = doc.reference.path.split('/');
+        final facId = pathSegments.length >= 2 ? pathSegments[1] : '';
+        return InventoryItem.fromMap(doc.data(), doc.id, facilityId: facId);
+      }).toList();
+    });
+  }
+
+  Future<void> restock(String facilityId, String medicineName, int quantity) async {
+    final medicineId = medicineName.toLowerCase().replaceAll(' ', '_');
+    final invRef = _firestore
+        .collection('inventory')
+        .doc(facilityId)
+        .collection('medicines')
+        .doc(medicineId);
+
+    await _firestore.runTransaction((transaction) async {
+      final invDoc = await transaction.get(invRef);
+      if (invDoc.exists) {
+        int current = invDoc.data()?['remainingQuantity'] ?? 0;
+        transaction.update(invRef, {
+          'remainingQuantity': current + quantity,
+          'lastUpdated': Timestamp.now(),
+        });
+      }
+    });
+  }
+
   // --- DAILY USAGE LOGS ---
 
   Stream<List<DailyUsageLog>> streamDailyLogs(String facilityId) {

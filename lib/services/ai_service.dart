@@ -190,7 +190,7 @@ Answer naturally using the blueprint and data.
 
   // ─── SMART ALERTS ──────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> generateSmartAlerts(List<InventoryItem> inventory) async {
-    final local = inventory.where((i) => (i.initialQuantity > 0 && i.remainingQuantity / i.initialQuantity < 0.2)).map((i) => {
+    final local = inventory.where((i) => (i.initialQuantity > 0 && i.remainingQuantity / i.initialQuantity < 0.35)).map((i) => {
       "type": "low_stock",
       "severity": "red",
       "title": i.medicineName,

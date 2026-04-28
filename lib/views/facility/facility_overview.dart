@@ -23,7 +23,7 @@ class FacilityOverview extends ConsumerWidget {
         }
         final inventory = snapshot.data ?? [];
         final expiringSoon = inventory.where((i) => i.expiryDate.difference(DateTime.now()).inDays < 90).length;
-        final lowStock = inventory.where((i) => i.remainingQuantity < (i.initialQuantity * 0.15)).length;
+        final lowStock = inventory.where((i) => i.remainingQuantity < (i.initialQuantity * 0.35)).length;
 
         String lastDelivery = 'No data';
         if (inventory.isNotEmpty) {
@@ -69,6 +69,15 @@ class FacilityOverview extends ConsumerWidget {
                       leading: const Icon(Icons.warning_rounded, color: MediColors.error, size: 20),
                       title: Text('${item.medicineName} critically low', style: const TextStyle(fontSize: 13, color: MediColors.textPrimary)),
                       subtitle: Text('${item.remainingQuantity} units left', style: const TextStyle(fontSize: 11, color: MediColors.textMuted)),
+                      trailing: TextButton(
+                        onPressed: () async {
+                          await ref.read(firebaseServiceProvider).restock(facilityId, item.medicineName, 500);
+                          if (context.mounted) {
+                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restocked 500 units of ${item.medicineName}')));
+                          }
+                        },
+                        child: const Text('Restock', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: MediColors.primary)),
+                      ),
                       dense: true, contentPadding: EdgeInsets.zero,
                     )));
                   }
@@ -154,10 +163,14 @@ class FacilityOverview extends ConsumerWidget {
                   spacing: 20,
                   runSpacing: 20,
                   children: [
-                    _buildKpiCard('Total Medicines', '${inventory.length}', Icons.medication_rounded, MediColors.info, const LinearGradient(colors: [Color(0xFF1E3A5F), Color(0xFF1E293B)])),
-                    _buildKpiCard('Expiring Soon', '$expiringSoon', Icons.hourglass_bottom_rounded, MediColors.warning, const LinearGradient(colors: [Color(0xFF3D2E0A), Color(0xFF1E293B)])),
-                    _buildKpiCard('Low Stock', '$lowStock', Icons.trending_down_rounded, MediColors.error, const LinearGradient(colors: [Color(0xFF3D1519), Color(0xFF1E293B)])),
-                    _buildKpiCard('Last Delivery', lastDelivery, Icons.local_shipping_rounded, MediColors.success, const LinearGradient(colors: [Color(0xFF0A3D2E), Color(0xFF1E293B)])),
+                    _buildKpiCard('Total Medicines', '${inventory.length}', Icons.medication_rounded, MediColors.info, const LinearGradient(colors: [Color(0xFF1E3A5F), Color(0xFF1E293B)]), () {}),
+                    _buildKpiCard('Expiring Soon', '$expiringSoon', Icons.hourglass_bottom_rounded, MediColors.warning, const LinearGradient(colors: [Color(0xFF3D2E0A), Color(0xFF1E293B)]), () {
+                      context.go('/facility/$facilityId/alerts');
+                    }),
+                    _buildKpiCard('Low Stock', '$lowStock', Icons.trending_down_rounded, MediColors.error, const LinearGradient(colors: [Color(0xFF3D1519), Color(0xFF1E293B)]), () {
+                      context.go('/facility/$facilityId/alerts');
+                    }),
+                    _buildKpiCard('Last Delivery', lastDelivery, Icons.local_shipping_rounded, MediColors.success, const LinearGradient(colors: [Color(0xFF0A3D2E), Color(0xFF1E293B)]), () {}),
                   ],
                 ),
                 const SizedBox(height: 36),
@@ -170,31 +183,34 @@ class FacilityOverview extends ConsumerWidget {
     );
   }
 
-  Widget _buildKpiCard(String title, String value, IconData icon, Color accent, LinearGradient bg) {
-    return Container(
-      width: 240,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: bg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
+  Widget _buildKpiCard(String title, String value, IconData icon, Color accent, LinearGradient bg, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 240,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          gradient: bg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: accent.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: accent, size: 22),
             ),
-            child: Icon(icon, color: accent, size: 22),
-          ),
-          const SizedBox(height: 18),
-          Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: accent)),
-          const SizedBox(height: 4),
-          Text(title, style: const TextStyle(fontSize: 13, color: MediColors.textSecondary)),
-        ],
+            const SizedBox(height: 18),
+            Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: accent)),
+            const SizedBox(height: 4),
+            Text(title, style: const TextStyle(fontSize: 13, color: MediColors.textSecondary)),
+          ],
+        ),
       ),
     );
   }

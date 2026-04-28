@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firebase_service.dart';
+import '../../models/inventory_item.dart';
 import 'package:med_supply_prototype/constants/colors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SidebarLayout extends StatefulWidget {
+class SidebarLayout extends ConsumerStatefulWidget {
   final Widget child;
   final String role;
   final String? facilityId;
@@ -18,10 +20,10 @@ class SidebarLayout extends StatefulWidget {
   });
 
   @override
-  State<SidebarLayout> createState() => _SidebarLayoutState();
+  ConsumerState<SidebarLayout> createState() => _SidebarLayoutState();
 }
 
-class _SidebarLayoutState extends State<SidebarLayout> {
+class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
   bool _isExpanded = false;
 
   int _calculateSelectedIndex(BuildContext context) {
@@ -130,10 +132,31 @@ class _SidebarLayoutState extends State<SidebarLayout> {
                   ),
 
                   // Nav Items
-                  ...List.generate(items.length, (i) {
-                    final isSelected = i == selectedIndex;
-                    return _buildNavItem(items[i], isSelected, () => _onItemTapped(i, context));
-                  }),
+                  StreamBuilder<List<InventoryItem>>(
+                    stream: widget.role == 'facility' && widget.facilityId != null
+                        ? ref.watch(firebaseServiceProvider).streamInventory(widget.facilityId!)
+                        : Stream.value([]),
+                    builder: (context, snapshot) {
+                      final inventory = snapshot.data ?? [];
+                      final hasAlerts = inventory.any((i) => 
+                        (i.initialQuantity > 0 && i.remainingQuantity / i.initialQuantity < 0.35) ||
+                        i.expiryDate.difference(DateTime.now()).inDays < 90
+                      );
+
+                      return Column(
+                        children: List.generate(items.length, (i) {
+                          final isSelected = i == selectedIndex;
+                          final isAlertTab = widget.role == 'facility' && i == 5; // Alerts index
+                          return _buildNavItem(
+                            items[i], 
+                            isSelected, 
+                            () => _onItemTapped(i, context),
+                            showBadge: isAlertTab && hasAlerts,
+                          );
+                        }),
+                      );
+                    },
+                  ),
 
                   const Spacer(),
 
@@ -160,7 +183,7 @@ class _SidebarLayoutState extends State<SidebarLayout> {
     );
   }
 
-  Widget _buildNavItem(_NavItem item, bool isSelected, VoidCallback onTap, {bool isLogout = false}) {
+  Widget _buildNavItem(_NavItem item, bool isSelected, VoidCallback onTap, {bool isLogout = false, bool showBadge = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: Material(
@@ -181,19 +204,37 @@ class _SidebarLayoutState extends State<SidebarLayout> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: 24,
-                    child: Center(
-                      child: Icon(
-                        item.icon,
-                        size: 22,
-                        color: isLogout
-                            ? MediColors.error
-                            : isSelected
-                                ? MediColors.primary
-                                : MediColors.textMuted,
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        child: Center(
+                          child: Icon(
+                            item.icon,
+                            size: 22,
+                            color: isLogout
+                                ? MediColors.error
+                                : isSelected
+                                    ? MediColors.primary
+                                    : MediColors.textMuted,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (showBadge)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: MediColors.error,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   if (_isExpanded) ...[
                     const SizedBox(width: 14),

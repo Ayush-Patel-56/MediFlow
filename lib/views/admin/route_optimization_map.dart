@@ -39,17 +39,25 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
     final firebaseService = ref.read(firebaseServiceProvider);
     final facs = await firebaseService.getFacilities();
     
-    Map<String, List<InventoryItem>> inventories = {};
-    for (var f in facs) {
-      final inv = await firebaseService.getInventoryOnce(f.id);
-      inventories[f.id] = inv;
-    }
-
     if (mounted) {
       setState(() {
         _facilities = facs;
-        _allInventories = inventories;
         _isLoading = false;
+      });
+    }
+  }
+
+  void _updateInventoriesFromStream(List<InventoryItem> allMeds) {
+    Map<String, List<InventoryItem>> newInventories = {};
+    for (var med in allMeds) {
+      if (med.facilityId != null) {
+        newInventories.putIfAbsent(med.facilityId!, () => []).add(med);
+      }
+    }
+    
+    if (mounted && newInventories.isNotEmpty) {
+      setState(() {
+        _allInventories = newInventories;
       });
     }
   }
@@ -108,199 +116,207 @@ class _RouteOptimizationMapState extends ConsumerState<RouteOptimizationMap> {
     return Scaffold(
       backgroundColor: MediColors.bg,
       appBar: AppBar(title: const Text('Advanced Route Optimization')),
-      body: StreamBuilder<List<MedRequest>>(
-        stream: ref.watch(firebaseServiceProvider).streamRequests(null),
-        builder: (context, snapshot) {
-          final requests = snapshot.data ?? [];
+      body: StreamBuilder<List<InventoryItem>>(
+        stream: ref.watch(firebaseServiceProvider).streamAllMedicines(),
+        builder: (context, invSnapshot) {
+          if (invSnapshot.hasData) {
+            _updateInventoriesFromStream(invSnapshot.data!);
+          }
 
-          return Row(
-            children: [
-              // Left Panel: Logistics Details
-              Container(
-                width: 400,
-                color: MediColors.surface,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Transfer Manifest', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
-                          const SizedBox(height: 8),
-                          const Text('Smart-scored redistribution paths factoring in rural priority and expiry risks.', style: TextStyle(color: MediColors.textSecondary, fontSize: 13)),
-                          const SizedBox(height: 16),
-                          if (_aiSummary.isNotEmpty && _showRoutes)
-                             Container(
-                               padding: const EdgeInsets.all(12),
-                               decoration: BoxDecoration(color: MediColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: MediColors.primary.withValues(alpha: 0.2))),
-                               child: Text(_aiSummary, style: const TextStyle(color: MediColors.primaryLight, fontStyle: FontStyle.italic, fontSize: 13)),
-                             ),
-                           const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: Container(
-                              decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
-                              child: FilledButton.icon(
-                                style: FilledButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent),
-                                icon: _isGenerating 
-                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : Icon(_showRoutes ? Icons.refresh_rounded : Icons.auto_awesome),
-                                label: Text(_showRoutes ? 'Re-optimize Routes' : 'Generate Optimal Routes'),
-                                onPressed: _isGenerating ? null : () => _generateOptimalRoutes(requests),
-                              ),
-                            ),
-                          ),
-                          if (_showRoutes)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: TextButton(
-                                onPressed: () => setState(() => _showRoutes = false),
-                                child: const Center(child: Text('Clear Map', style: TextStyle(color: MediColors.textMuted))),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: !_showRoutes 
-                        ? const Center(child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.map_outlined, size: 48, color: MediColors.textMuted),
-                              SizedBox(height: 12),
-                              Text('Click Generate to start analysis', style: TextStyle(color: MediColors.textMuted)),
-                            ],
-                          ))
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(24),
-                            itemCount: _recommendations.length,
-                            itemBuilder: (context, index) {
-                              final rec = _recommendations[index];
-                              return _buildTransferCard(rec);
-                            },
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Right Panel: Map
-              Expanded(
-                child: Stack(
-                  children: [
-                    FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: mapCenter,
-                        initialZoom: 10.0,
-                        interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.all,
-                        ),
-                      ),
+          return StreamBuilder<List<MedRequest>>(
+            stream: ref.watch(firebaseServiceProvider).streamRequests(null),
+            builder: (context, snapshot) {
+              final requests = snapshot.data ?? [];
+
+              return Row(
+                children: [
+                  // Left Panel: Logistics Details
+                  Container(
+                    width: 400,
+                    color: MediColors.surface,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TileLayer(
-                          urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                          subdomains: const ['a', 'b', 'c', 'd'],
-                          userAgentPackageName: 'com.mediflow.app',
-                        ),
-                        if (_showRoutes)
-                          PolylineLayer(
-                            polylines: _recommendations.map((rec) {
-                              final key = '${rec.donor.id}_${rec.recipient.id}';
-                              final points = _roadRoutes[key] ?? [LatLng(rec.donor.latitude, rec.donor.longitude), LatLng(rec.recipient.latitude, rec.recipient.longitude)];
-                              print('RouteOptimizationMap: Rendering polyline for $key with ${points.length} points');
-                              return Polyline(
-                                points: points,
-                                color: rec.recipient.type == 'rural' ? Colors.blueAccent : MediColors.primary,
-                                strokeWidth: 8.0,
-                              );
-                            }).toList(),
-                          ),
-                        MarkerLayer(
-                          markers: _facilities.map((f) {
-                            bool isDonor = _recommendations.any((r) => r.donor.id == f.id);
-                            bool isRecipient = _recommendations.any((r) => r.recipient.id == f.id);
-                            
-                            Color markerColor = Colors.red; // default
-                            if (_showRoutes) {
-                              if (isDonor) markerColor = Colors.green;
-                              else if (isRecipient) markerColor = Colors.orange;
-                            }
-
-                            return Marker(
-                              point: LatLng(f.latitude, f.longitude),
-                              width: 120,
-                              height: 80,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.local_hospital, color: markerColor, size: 36),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(4),
-                                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 4)],
-                                    ),
-                                    child: Text(
-                                      f.name,
-                                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Transfer Manifest', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+                              const SizedBox(height: 8),
+                              const Text('Smart-scored redistribution paths factoring in rural priority and expiry risks.', style: TextStyle(color: MediColors.textSecondary, fontSize: 13)),
+                              const SizedBox(height: 16),
+                              if (_aiSummary.isNotEmpty && _showRoutes)
+                                 Container(
+                                   padding: const EdgeInsets.all(12),
+                                   decoration: BoxDecoration(color: MediColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: MediColors.primary.withValues(alpha: 0.2))),
+                                   child: Text(_aiSummary, style: const TextStyle(color: MediColors.primaryLight, fontStyle: FontStyle.italic, fontSize: 13)),
+                                 ),
+                               const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: Container(
+                                  decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent),
+                                    icon: _isGenerating 
+                                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : Icon(_showRoutes ? Icons.refresh_rounded : Icons.auto_awesome),
+                                    label: Text(_showRoutes ? 'Re-optimize Routes' : 'Generate Optimal Routes'),
+                                    onPressed: _isGenerating ? null : () => _generateOptimalRoutes(requests),
                                   ),
-                                ],
+                                ),
                               ),
-                            );
-                          }).toList(),
+                              if (_showRoutes)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: TextButton(
+                                    onPressed: () => setState(() => _showRoutes = false),
+                                    child: const Center(child: Text('Clear Map', style: TextStyle(color: MediColors.textMuted))),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: !_showRoutes 
+                            ? const Center(child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.map_outlined, size: 48, color: MediColors.textMuted),
+                                  SizedBox(height: 12),
+                                  Text('Click Generate to start analysis', style: TextStyle(color: MediColors.textMuted)),
+                                ],
+                              ))
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(24),
+                                itemCount: _recommendations.length,
+                                itemBuilder: (context, index) {
+                                  final rec = _recommendations[index];
+                                  return _buildTransferCard(rec);
+                                },
+                              ),
                         ),
                       ],
                     ),
-                    // Zoom Controls
-                    Positioned(
-                      top: 24,
-                      right: 24,
-                      child: Column(
-                        children: [
-                          _buildMapControl(Icons.add, () {
-                            _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1);
-                          }),
-                          const SizedBox(height: 8),
-                          _buildMapControl(Icons.remove, () {
-                            _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1);
-                          }),
-                        ],
-                      ),
-                    ),
-                    // Legend
-                    Positioned(
-                      bottom: 24,
-                      right: 24,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: MediColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: MediColors.border)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  
+                  // Right Panel: Map
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        FlutterMap(
+                          mapController: _mapController,
+                          options: MapOptions(
+                            initialCenter: mapCenter,
+                            initialZoom: 10.0,
+                            interactionOptions: const InteractionOptions(
+                              flags: InteractiveFlag.all,
+                            ),
+                          ),
                           children: [
-                            const Text('Optimization Legend', style: TextStyle(fontWeight: FontWeight.bold, color: MediColors.textPrimary)),
-                            const SizedBox(height: 12),
-                            _buildLegendItem(Colors.green, 'Donor Site (Surplus)'),
-                            _buildLegendItem(Colors.orange, 'Recipient Site (Deficit)'),
-                            _buildLegendItem(Colors.blueAccent, 'Rural Priority Route'),
-                            _buildLegendItem(MediColors.primary, 'Standard Route'),
+                            TileLayer(
+                              urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                              subdomains: const ['a', 'b', 'c', 'd'],
+                              userAgentPackageName: 'com.mediflow.app',
+                            ),
+                            if (_showRoutes)
+                              PolylineLayer(
+                                polylines: _recommendations.map((rec) {
+                                  final key = '${rec.donor.id}_${rec.recipient.id}';
+                                  final points = _roadRoutes[key] ?? [LatLng(rec.donor.latitude, rec.donor.longitude), LatLng(rec.recipient.latitude, rec.recipient.longitude)];
+                                  return Polyline(
+                                    points: points,
+                                    color: rec.recipient.type == 'rural' ? Colors.blueAccent : MediColors.primary,
+                                    strokeWidth: 8.0,
+                                  );
+                                }).toList(),
+                              ),
+                            MarkerLayer(
+                              markers: _facilities.map((f) {
+                                bool isDonor = _recommendations.any((r) => r.donor.id == f.id);
+                                bool isRecipient = _recommendations.any((r) => r.recipient.id == f.id);
+                                
+                                Color markerColor = Colors.red; // default
+                                if (_showRoutes) {
+                                  if (isDonor) markerColor = Colors.green;
+                                  else if (isRecipient) markerColor = Colors.orange;
+                                }
+
+                                return Marker(
+                                  point: LatLng(f.latitude, f.longitude),
+                                  width: 120,
+                                  height: 80,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.local_hospital, color: markerColor, size: 36),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(4),
+                                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 4)],
+                                        ),
+                                        child: Text(
+                                          f.name,
+                                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
                           ],
                         ),
-                      ),
+                        // Zoom Controls
+                        Positioned(
+                          top: 24,
+                          right: 24,
+                          child: Column(
+                            children: [
+                              _buildMapControl(Icons.add, () {
+                                _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1);
+                              }),
+                              const SizedBox(height: 8),
+                              _buildMapControl(Icons.remove, () {
+                                _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1);
+                              }),
+                            ],
+                          ),
+                        ),
+                        // Legend
+                        Positioned(
+                          bottom: 24,
+                          right: 24,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: MediColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: MediColors.border)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Optimization Legend', style: TextStyle(fontWeight: FontWeight.bold, color: MediColors.textPrimary)),
+                                const SizedBox(height: 12),
+                                _buildLegendItem(Colors.green, 'Donor Site (Surplus)'),
+                                _buildLegendItem(Colors.orange, 'Recipient Site (Deficit)'),
+                                _buildLegendItem(Colors.blueAccent, 'Rural Priority Route'),
+                                _buildLegendItem(MediColors.primary, 'Standard Route'),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           );
-        }
+        },
       ),
     );
   }
