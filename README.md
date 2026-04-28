@@ -53,14 +53,19 @@
 
 ## Technical Architecture
 
-| Component | Technology | Rationale |
-| :--- | :--- | :--- |
-| **Forecasting** | Gemini 1.5 Flash | Large context window for processing months of usage logs & reasoning. |
-| **Optimization** | Heuristic OTS | Proprietary scoring factoring Proximity, Rural Priority, and Qty Match. |
-| **Routing** | OSRM / ORS | Road-accurate pathfinding and geometry decoding for map polylines. |
-| **Backend** | Firebase | Real-time synchronization, atomic transactions, and secure auth. |
-| **Frontend** | Flutter | Multi-platform consistency with high-performance mapping overlays. |
-| **State Mgmt** | Riverpod | Reactive data flow and dependency injection across services. |
+MediFlow is built on **Clean Architecture** principles, ensuring that business logic is decoupled from the UI and external services.
+
+### 1. The AI Engine (Gemini 1.5 Flash)
+We leverage Gemini's large context window to process months of anonymized usage logs. The model acts as a **Predictive Reasoning Layer**, identifying non-obvious patterns like demographic-based medicine consumption surges.
+
+### 2. The Optimization Heuristic (OTS)
+Our proprietary **Optimal Transfer Score** ensures that redistribution is both efficient and equitable:
+$$OTS = (w_{dist} \cdot Proximity) + (w_{prior} \cdot RuralPriority) + (w_{qty} \cdot QtyMatch)$$
+*   **Proximity**: Minimizes logistics cost and time.
+*   **Rural Priority**: A weight multiplier ensuring that remote facilities are never "starved" by the algorithm.
+
+### 3. Geospatial Routing System
+Integrated with **flutter_map** and **OSRM/OpenRouteService**, our routing engine decodes complex polylines to provide precise, road-accurate delivery paths, factoring in real-world geography.
 
 ---
 
