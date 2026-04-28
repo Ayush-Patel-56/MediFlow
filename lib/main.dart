@@ -37,10 +37,23 @@ final GlobalKey<NavigatorState> _adminShellNavigatorKey = GlobalKey<NavigatorSta
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  
+  // Initialize Firebase immediately with hardcoded options
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('Firebase initialized successfully');
+  } catch (e) {
+    print('Firebase initialization error: $e');
+  }
+
+  // Load dotenv in the background or separately
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    print('Dotenv load error: $e');
+  }
 
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
