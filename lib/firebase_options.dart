@@ -47,5 +47,4 @@ class DefaultFirebaseOptions {
     messagingSenderId: '71200393927',
     appId: '1:71200393927:web:346d720af6b9cf11898ce2',
   );
-
 }

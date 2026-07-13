@@ -25,7 +25,8 @@ class InventoryItem {
     this.facilityId,
   });
 
-  factory InventoryItem.fromMap(Map<String, dynamic> map, String id, {String? facilityId}) {
+  factory InventoryItem.fromMap(Map<String, dynamic> map, String id,
+      {String? facilityId}) {
     return InventoryItem(
       id: id,
       medicineName: map['medicineName'] ?? '',
@@ -35,8 +36,8 @@ class InventoryItem {
       initialQuantity: map['initialQuantity']?.toInt() ?? 0,
       remainingQuantity: map['remainingQuantity']?.toInt() ?? 0,
       unit: map['unit'] ?? 'units',
-      lastUpdated: map['lastUpdated'] != null 
-          ? (map['lastUpdated'] as Timestamp).toDate() 
+      lastUpdated: map['lastUpdated'] != null
+          ? (map['lastUpdated'] as Timestamp).toDate()
           : DateTime.now(),
       facilityId: facilityId ?? map['facilityId'],
     );

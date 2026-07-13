@@ -19,7 +19,7 @@ class ToolDispatcher {
           final facilityId = call.args['facilityId'] as String;
           final medicineName = call.args['medicineName'] as String;
           final quantity = (call.args['quantity'] as num).toInt();
-          
+
           await _firebaseService.addRequest(MedRequest(
             id: '', // Firestore auto-generates
             facilityId: facilityId,
@@ -30,13 +30,16 @@ class ToolDispatcher {
             status: RequestStatus.pending,
             notes: 'AI generated shortage report',
           ));
-          return {'status': 'success', 'details': 'Shortage reported for $quantity of $medicineName'};
+          return {
+            'status': 'success',
+            'details': 'Shortage reported for $quantity of $medicineName'
+          };
 
         case 'report_surplus':
           final facilityId = call.args['facilityId'] as String;
           final medicineName = call.args['medicineName'] as String;
           final quantity = (call.args['quantity'] as num).toInt();
-          
+
           await _firebaseService.addRequest(MedRequest(
             id: '',
             facilityId: facilityId,
@@ -47,28 +50,39 @@ class ToolDispatcher {
             status: RequestStatus.pending,
             notes: 'AI generated surplus report',
           ));
-          return {'status': 'success', 'details': 'Surplus reported for $quantity of $medicineName'};
-          
+          return {
+            'status': 'success',
+            'details': 'Surplus reported for $quantity of $medicineName'
+          };
+
         case 'check_system_inventory':
           // Fetch across facilities
           final facilities = await _firebaseService.getFacilities();
           Map<String, dynamic> systemStock = {};
-          
+
           for (var fac in facilities) {
-             final inv = await _firebaseService.getInventoryOnce(fac.id);
-             systemStock[fac.name] = inv.map((i) => {
-               'name': i.medicineName,
-               'remaining': i.remainingQuantity,
-               'initial': i.initialQuantity,
-             }).toList();
+            final inv = await _firebaseService.getInventoryOnce(fac.id);
+            systemStock[fac.name] = inv
+                .map((i) => {
+                      'name': i.medicineName,
+                      'remaining': i.remainingQuantity,
+                      'initial': i.initialQuantity,
+                    })
+                .toList();
           }
           return {'status': 'success', 'system_inventory': systemStock};
 
         default:
-          return {'status': 'error', 'details': 'Unknown function call: ${call.name}'};
+          return {
+            'status': 'error',
+            'details': 'Unknown function call: ${call.name}'
+          };
       }
     } catch (e) {
-      return {'status': 'error', 'details': 'Failed to execute ${call.name}: $e'};
+      return {
+        'status': 'error',
+        'details': 'Failed to execute ${call.name}: $e'
+      };
     }
   }
 }

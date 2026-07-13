@@ -52,22 +52,48 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
   void _onItemTapped(int index, BuildContext context) {
     if (widget.role == 'facility' && widget.facilityId != null) {
       switch (index) {
-        case 0: context.go('/facility/${widget.facilityId}/overview'); break;
-        case 1: context.go('/facility/${widget.facilityId}/logging'); break;
-        case 2: context.go('/facility/${widget.facilityId}/forecast'); break;
-        case 3: context.go('/facility/${widget.facilityId}/alerts'); break;
-        case 4: context.go('/facility/${widget.facilityId}/indent'); break;
-        case 5: context.go('/facility/${widget.facilityId}/chat'); break;
-        case 6: context.go('/facility/${widget.facilityId}/help'); break;
+        case 0:
+          context.go('/facility/${widget.facilityId}/overview');
+          break;
+        case 1:
+          context.go('/facility/${widget.facilityId}/logging');
+          break;
+        case 2:
+          context.go('/facility/${widget.facilityId}/forecast');
+          break;
+        case 3:
+          context.go('/facility/${widget.facilityId}/alerts');
+          break;
+        case 4:
+          context.go('/facility/${widget.facilityId}/indent');
+          break;
+        case 5:
+          context.go('/facility/${widget.facilityId}/chat');
+          break;
+        case 6:
+          context.go('/facility/${widget.facilityId}/help');
+          break;
       }
     } else if (widget.role == 'admin') {
       switch (index) {
-        case 0: context.go('/admin/overview'); break;
-        case 1: context.go('/admin/approvals'); break;
-        case 2: context.go('/admin/supply-status'); break;
-        case 3: context.go('/admin/routing'); break;
-        case 4: context.go('/admin/chat'); break;
-        case 5: context.go('/admin/help'); break;
+        case 0:
+          context.go('/admin/overview');
+          break;
+        case 1:
+          context.go('/admin/approvals');
+          break;
+        case 2:
+          context.go('/admin/supply-status');
+          break;
+        case 3:
+          context.go('/admin/routing');
+          break;
+        case 4:
+          context.go('/admin/chat');
+          break;
+        case 5:
+          context.go('/admin/help');
+          break;
       }
     }
   }
@@ -110,7 +136,8 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
               width: _isExpanded ? 220 : 72,
               decoration: BoxDecoration(
                 color: MediColors.surface,
-                border: Border(right: BorderSide(color: MediColors.border, width: 1)),
+                border: Border(
+                    right: BorderSide(color: MediColors.border, width: 1)),
               ),
               child: Column(
                 children: [
@@ -125,30 +152,40 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
                         gradient: MediColors.primaryGradient,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Icon(Icons.health_and_safety_rounded, color: Colors.white, size: 24),
+                      child: const Icon(Icons.health_and_safety_rounded,
+                          color: Colors.white, size: 24),
                     ),
                   ),
 
                   // Nav Items
                   StreamBuilder<List<InventoryItem>>(
-                    stream: widget.role == 'facility' && widget.facilityId != null
-                        ? ref.watch(firebaseServiceProvider).streamInventory(widget.facilityId!)
-                        : Stream.value([]),
+                    stream:
+                        widget.role == 'facility' && widget.facilityId != null
+                            ? ref
+                                .watch(firebaseServiceProvider)
+                                .streamInventory(widget.facilityId!)
+                            : Stream.value([]),
                     builder: (context, snapshot) {
                       final inventory = snapshot.data ?? [];
                       final hasAlerts = inventory.any((i) {
-                        final pct = i.initialQuantity > 0 ? i.remainingQuantity / i.initialQuantity : 0.0;
-                        final daysLeft = i.expiryDate.difference(DateTime.now()).inDays;
-                        return pct <= 0.20 || i.remainingQuantity <= 500 || daysLeft <= 30;
+                        final pct = i.initialQuantity > 0
+                            ? i.remainingQuantity / i.initialQuantity
+                            : 0.0;
+                        final daysLeft =
+                            i.expiryDate.difference(DateTime.now()).inDays;
+                        return pct <= 0.20 ||
+                            i.remainingQuantity <= 500 ||
+                            daysLeft <= 30;
                       });
 
                       return Column(
                         children: List.generate(items.length, (i) {
                           final isSelected = i == selectedIndex;
-                          final isAlertTab = widget.role == 'facility' && i == 3; // Alerts index
+                          final isAlertTab = widget.role == 'facility' &&
+                              i == 3; // Alerts index
                           return _buildNavItem(
-                            items[i], 
-                            isSelected, 
+                            items[i],
+                            isSelected,
                             () => _onItemTapped(i, context),
                             showBadge: isAlertTab && hasAlerts,
                           );
@@ -182,7 +219,8 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
     );
   }
 
-  Widget _buildNavItem(_NavItem item, bool isSelected, VoidCallback onTap, {bool isLogout = false, bool showBadge = false}) {
+  Widget _buildNavItem(_NavItem item, bool isSelected, VoidCallback onTap,
+      {bool isLogout = false, bool showBadge = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: Material(
@@ -196,8 +234,13 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              color: isSelected ? MediColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-              border: isSelected ? Border.all(color: MediColors.primary.withValues(alpha: 0.25)) : null,
+              color: isSelected
+                  ? MediColors.primary.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              border: isSelected
+                  ? Border.all(
+                      color: MediColors.primary.withValues(alpha: 0.25))
+                  : null,
             ),
             child: ClipRect(
               child: Row(
@@ -242,7 +285,8 @@ class _SidebarLayoutState extends ConsumerState<SidebarLayout> {
                         item.label,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
                           color: isLogout
                               ? MediColors.error
                               : isSelected

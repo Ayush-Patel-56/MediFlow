@@ -9,7 +9,8 @@ import '../models/request.dart';
 import 'simulation_service.dart';
 
 final firebaseServiceProvider = Provider<FirebaseService>((ref) {
-  return FirebaseService(FirebaseFirestore.instance, auth.FirebaseAuth.instance);
+  return FirebaseService(
+      FirebaseFirestore.instance, auth.FirebaseAuth.instance);
 });
 
 class FirebaseService {
@@ -24,7 +25,8 @@ class FirebaseService {
   // --- AUTH & FACILITY ---
 
   Future<auth.UserCredential> login(String email, String password) async {
-    return await _auth.signInWithEmailAndPassword(email: email, password: password);
+    return await _auth.signInWithEmailAndPassword(
+        email: email, password: password);
   }
 
   Future<void> signUpFacility({
@@ -38,11 +40,13 @@ class FirebaseService {
   }) async {
     // 1. Generate a deterministic ID from email to bypass Auth dependency
     // This ensures Firestore docs are created even if Auth rate limits hit.
-    final String facilityId = email.toLowerCase().replaceAll('@', '_').replaceAll('.', '_');
-    
+    final String facilityId =
+        email.toLowerCase().replaceAll('@', '_').replaceAll('.', '_');
+
     // 2. Try to create Auth User in background (Non-blocking for data seeding)
     try {
-      await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      await _auth.createUserWithEmailAndPassword(
+          email: email, password: password);
     } catch (e) {
       // If user exists or rate limit hits, we don't care for seeding Firestore data
       print('Auth skip/fail for $email: $e');
@@ -50,7 +54,7 @@ class FirebaseService {
 
     // 3. Generate Profile
     final profile = _simulation.generateRealisticProfile(type: type);
-    
+
     // 4. Create Facility Document
     final facility = Facility(
       id: facilityId,
@@ -63,7 +67,10 @@ class FirebaseService {
       createdAt: (profile['createdAt'] as Timestamp).toDate(),
     );
 
-    await _firestore.collection('facilities').doc(facilityId).set(facility.toMap());
+    await _firestore
+        .collection('facilities')
+        .doc(facilityId)
+        .set(facility.toMap());
 
     // 5. Run Initial Simulation (30 days)
     await _simulation.runFullSimulation(facilityId, facility.type);
@@ -71,7 +78,9 @@ class FirebaseService {
 
   Future<List<Facility>> getFacilities() async {
     final snapshot = await _firestore.collection('facilities').get();
-    return snapshot.docs.map((doc) => Facility.fromMap(doc.data(), doc.id)).toList();
+    return snapshot.docs
+        .map((doc) => Facility.fromMap(doc.data(), doc.id))
+        .toList();
   }
 
   Future<Facility?> getFacility(String id) async {
@@ -88,7 +97,9 @@ class FirebaseService {
         .doc(facilityId)
         .collection('medicines')
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => InventoryItem.fromMap(doc.data(), doc.id)).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => InventoryItem.fromMap(doc.data(), doc.id))
+            .toList());
   }
 
   Future<List<InventoryItem>> getInventoryOnce(String facilityId) async {
@@ -97,7 +108,9 @@ class FirebaseService {
         .doc(facilityId)
         .collection('medicines')
         .get();
-    return snapshot.docs.map((doc) => InventoryItem.fromMap(doc.data(), doc.id)).toList();
+    return snapshot.docs
+        .map((doc) => InventoryItem.fromMap(doc.data(), doc.id))
+        .toList();
   }
 
   Stream<List<InventoryItem>> streamAllMedicines() {
@@ -111,7 +124,8 @@ class FirebaseService {
     });
   }
 
-  Future<void> restock(String facilityId, String medicineName, int quantity) async {
+  Future<void> restock(
+      String facilityId, String medicineName, int quantity) async {
     final medicineId = medicineName.toLowerCase().replaceAll(' ', '_');
     final invRef = _firestore
         .collection('inventory')
@@ -141,10 +155,13 @@ class FirebaseService {
         .orderBy('date', descending: true)
         .limit(120)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => DailyUsageLog.fromMap(doc.data(), doc.id)).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => DailyUsageLog.fromMap(doc.data(), doc.id))
+            .toList());
   }
 
-  Future<List<DailyUsageLog>> getRecentLogs(String facilityId, {int days = 30}) async {
+  Future<List<DailyUsageLog>> getRecentLogs(String facilityId,
+      {int days = 30}) async {
     final snapshot = await _firestore
         .collection('daily_usage_logs')
         .doc(facilityId)
@@ -152,7 +169,9 @@ class FirebaseService {
         .orderBy('date', descending: true)
         .limit(days)
         .get();
-    return snapshot.docs.map((doc) => DailyUsageLog.fromMap(doc.data(), doc.id)).toList();
+    return snapshot.docs
+        .map((doc) => DailyUsageLog.fromMap(doc.data(), doc.id))
+        .toList();
   }
 
   // --- LOGGING ---
@@ -164,7 +183,8 @@ class FirebaseService {
     required int quantity,
     required int patients,
   }) async {
-    final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    final dateStr =
+        "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
     final logRef = _firestore
         .collection('daily_usage_logs')
         .doc(facilityId)
@@ -195,15 +215,17 @@ class FirebaseService {
       if (logDoc.exists) {
         List medicines = logDoc.data()?['medicines'] ?? [];
         int totalPatients = logDoc.data()?['totalPatients'] ?? 0;
-        
+
         // Update existing medicine usage or add new
-        int index = medicines.indexWhere((m) => m['medicineName'] == medicineName);
+        int index =
+            medicines.indexWhere((m) => m['medicineName'] == medicineName);
         if (index >= 0) {
           medicines[index]['unitsDistributed'] += quantity;
         } else {
-          medicines.add({'medicineName': medicineName, 'unitsDistributed': quantity});
+          medicines.add(
+              {'medicineName': medicineName, 'unitsDistributed': quantity});
         }
-        
+
         transaction.update(logRef, {
           'medicines': medicines,
           'totalPatients': totalPatients + patients,
@@ -211,7 +233,9 @@ class FirebaseService {
       } else {
         transaction.set(logRef, {
           'date': Timestamp.fromDate(date),
-          'medicines': [{'medicineName': medicineName, 'unitsDistributed': quantity}],
+          'medicines': [
+            {'medicineName': medicineName, 'unitsDistributed': quantity}
+          ],
           'totalPatients': patients,
         });
       }
@@ -223,16 +247,21 @@ class FirebaseService {
     if (facilityId != null) {
       // Note: Requests are still top-level as they involve cross-facility matching
       return query.where('facilityId', isEqualTo: facilityId).snapshots().map(
-          (snapshot) => snapshot.docs.map((doc) => MedRequest.fromMap(doc.data(), doc.id)).toList());
+          (snapshot) => snapshot.docs
+              .map((doc) => MedRequest.fromMap(doc.data(), doc.id))
+              .toList());
     }
-    return query.snapshots().map((snapshot) => snapshot.docs.map((doc) => MedRequest.fromMap(doc.data(), doc.id)).toList());
+    return query.snapshots().map((snapshot) => snapshot.docs
+        .map((doc) => MedRequest.fromMap(doc.data(), doc.id))
+        .toList());
   }
-  
+
   Future<void> addRequest(MedRequest request) async {
     await _firestore.collection('requests').add(request.toMap());
   }
 
-  Future<void> updateRequestStatus(String requestId, RequestStatus status) async {
+  Future<void> updateRequestStatus(
+      String requestId, RequestStatus status) async {
     await _firestore.collection('requests').doc(requestId).update({
       'status': status.name,
     });
@@ -272,13 +301,18 @@ class FirebaseService {
   Future<void> clearDatabase() async {
     // Note: This is for demo purposes to provide a clean state.
     // In production, you would never wipe collections like this.
-    
-    final collections = ['facilities', 'inventory', 'daily_usage_logs', 'requests'];
-    
+
+    final collections = [
+      'facilities',
+      'inventory',
+      'daily_usage_logs',
+      'requests'
+    ];
+
     for (var collection in collections) {
       final snapshot = await _firestore.collection(collection).get();
       List<Future> deleteFutures = [];
-      
+
       for (var doc in snapshot.docs) {
         // For hierarchical collections, we need to delete sub-collections too
         if (collection == 'inventory') {
@@ -295,7 +329,7 @@ class FirebaseService {
           for (var l in logs.docs) deleteFutures.add(l.reference.delete());
         }
         deleteFutures.add(doc.reference.delete());
-        
+
         if (deleteFutures.length >= 50) {
           await Future.wait(deleteFutures);
           deleteFutures = [];
@@ -304,7 +338,7 @@ class FirebaseService {
       if (deleteFutures.isNotEmpty) await Future.wait(deleteFutures);
     }
   }
-  
+
   Future<String?> seedDemoData() async {
     try {
       // 1. Clear old data to avoid duplicates and schema conflicts
@@ -312,21 +346,86 @@ class FirebaseService {
 
       // 2. Seed Admin
       try {
-        await _auth.createUserWithEmailAndPassword(email: 'admin@mediflow.com', password: 'password123');
+        await _auth.createUserWithEmailAndPassword(
+            email: 'admin@mediflow.com', password: 'password123');
       } catch (e) {
         // Ignore if exists
       }
 
       // 3. Seed new facilities
       final List<Map<String, dynamic>> demoFacilities = [
-        {'name': 'PHC Rampur', 'type': 'rural', 'email': 'rampur@mediflow.com', 'password': 'password123', 'region': 'North District', 'lat': 28.6139, 'lng': 77.2090},
-        {'name': 'CHC Modinagar', 'type': 'urban', 'email': 'modinagar@mediflow.com', 'password': 'password123', 'region': 'East Zone', 'lat': 28.6500, 'lng': 77.3000},
-        {'name': 'PHC Loni', 'type': 'urban', 'email': 'loni@mediflow.com', 'password': 'password123', 'region': 'North District', 'lat': 28.7000, 'lng': 77.2800},
-        {'name': 'DH Ghaziabad', 'type': 'urban', 'email': 'ghaziabad@mediflow.com', 'password': 'password123', 'region': 'Central Hub', 'lat': 28.6600, 'lng': 77.4200},
-        {'name': 'PHC Bhojpur', 'type': 'rural', 'email': 'bhojpur@mediflow.com', 'password': 'password123', 'region': 'West Sector', 'lat': 28.7500, 'lng': 77.5000},
-        {'name': 'CHC Hapur', 'type': 'urban', 'email': 'hapur@mediflow.com', 'password': 'password123', 'region': 'East Zone', 'lat': 28.7200, 'lng': 77.7800},
-        {'name': 'PHC Dasna', 'type': 'rural', 'email': 'dasna@mediflow.com', 'password': 'password123', 'region': 'Central Hub', 'lat': 28.6800, 'lng': 77.5200},
-        {'name': 'SubCentre Pilkhuwa', 'type': 'rural', 'email': 'pilkhuwa@mediflow.com', 'password': 'password123', 'region': 'West Sector', 'lat': 28.7100, 'lng': 77.6500},
+        {
+          'name': 'PHC Rampur',
+          'type': 'rural',
+          'email': 'rampur@mediflow.com',
+          'password': 'password123',
+          'region': 'North District',
+          'lat': 28.6139,
+          'lng': 77.2090
+        },
+        {
+          'name': 'CHC Modinagar',
+          'type': 'urban',
+          'email': 'modinagar@mediflow.com',
+          'password': 'password123',
+          'region': 'East Zone',
+          'lat': 28.6500,
+          'lng': 77.3000
+        },
+        {
+          'name': 'PHC Loni',
+          'type': 'urban',
+          'email': 'loni@mediflow.com',
+          'password': 'password123',
+          'region': 'North District',
+          'lat': 28.7000,
+          'lng': 77.2800
+        },
+        {
+          'name': 'DH Ghaziabad',
+          'type': 'urban',
+          'email': 'ghaziabad@mediflow.com',
+          'password': 'password123',
+          'region': 'Central Hub',
+          'lat': 28.6600,
+          'lng': 77.4200
+        },
+        {
+          'name': 'PHC Bhojpur',
+          'type': 'rural',
+          'email': 'bhojpur@mediflow.com',
+          'password': 'password123',
+          'region': 'West Sector',
+          'lat': 28.7500,
+          'lng': 77.5000
+        },
+        {
+          'name': 'CHC Hapur',
+          'type': 'urban',
+          'email': 'hapur@mediflow.com',
+          'password': 'password123',
+          'region': 'East Zone',
+          'lat': 28.7200,
+          'lng': 77.7800
+        },
+        {
+          'name': 'PHC Dasna',
+          'type': 'rural',
+          'email': 'dasna@mediflow.com',
+          'password': 'password123',
+          'region': 'Central Hub',
+          'lat': 28.6800,
+          'lng': 77.5200
+        },
+        {
+          'name': 'SubCentre Pilkhuwa',
+          'type': 'rural',
+          'email': 'pilkhuwa@mediflow.com',
+          'password': 'password123',
+          'region': 'West Sector',
+          'lat': 28.7100,
+          'lng': 77.6500
+        },
       ];
 
       for (var f in demoFacilities) {
@@ -349,66 +448,77 @@ class FirebaseService {
       }
 
       // 4. Seed sample requests for Admin Dashboard KPIs & Route Optimization
-      final String f1Id = demoFacilities[0]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Rampur (Rural)
-      final String f2Id = demoFacilities[1]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Modinagar (Urban)
-      final String f3Id = demoFacilities[2]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Loni (Urban)
-      final String f4Id = demoFacilities[3]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Ghaziabad (Urban)
-      final String f5Id = demoFacilities[4]['email']!.toLowerCase().replaceAll('@', '_').replaceAll('.', '_'); // Bhojpur (Rural)
-      
+      final String f1Id = demoFacilities[0]['email']!
+          .toLowerCase()
+          .replaceAll('@', '_')
+          .replaceAll('.', '_'); // Rampur (Rural)
+      final String f2Id = demoFacilities[1]['email']!
+          .toLowerCase()
+          .replaceAll('@', '_')
+          .replaceAll('.', '_'); // Modinagar (Urban)
+      final String f3Id = demoFacilities[2]['email']!
+          .toLowerCase()
+          .replaceAll('@', '_')
+          .replaceAll('.', '_'); // Loni (Urban)
+      final String f4Id = demoFacilities[3]['email']!
+          .toLowerCase()
+          .replaceAll('@', '_')
+          .replaceAll('.', '_'); // Ghaziabad (Urban)
+      final String f5Id = demoFacilities[4]['email']!
+          .toLowerCase()
+          .replaceAll('@', '_')
+          .replaceAll('.', '_'); // Bhojpur (Rural)
+
       // Match 1: ORS (Rampur Rural Needs, Modinagar Urban Surplus)
       await addRequest(MedRequest(
-        id: '', 
-        facilityId: f1Id, 
-        medicineName: 'ORS', 
-        type: RequestType.regularIndent, 
-        quantity: 800, 
-        requestDate: DateTime.now(), 
-        status: RequestStatus.pending,
-        notes: 'Critical shortage predicted by AI for summer spike.'
-      ));
+          id: '',
+          facilityId: f1Id,
+          medicineName: 'ORS',
+          type: RequestType.regularIndent,
+          quantity: 800,
+          requestDate: DateTime.now(),
+          status: RequestStatus.pending,
+          notes: 'Critical shortage predicted by AI for summer spike.'));
 
       await addRequest(MedRequest(
-        id: '', 
-        facilityId: f2Id, 
-        medicineName: 'ORS', 
-        type: RequestType.surplus, 
-        quantity: 1000, 
-        requestDate: DateTime.now(), 
-        status: RequestStatus.pending,
-        notes: 'Excess stock identified. Available for redistribution.'
-      ));
+          id: '',
+          facilityId: f2Id,
+          medicineName: 'ORS',
+          type: RequestType.surplus,
+          quantity: 1000,
+          requestDate: DateTime.now(),
+          status: RequestStatus.pending,
+          notes: 'Excess stock identified. Available for redistribution.'));
 
       // Match 2: Antibiotics (Bhojpur Rural Needs, Ghaziabad Urban Surplus)
       await addRequest(MedRequest(
-        id: '', 
-        facilityId: f5Id, 
-        medicineName: 'Antibiotic', 
-        type: RequestType.shortage, 
-        quantity: 300, 
-        requestDate: DateTime.now(), 
-        status: RequestStatus.approved,
-        notes: 'Post-monsoon surge in infections.'
-      ));
+          id: '',
+          facilityId: f5Id,
+          medicineName: 'Antibiotic',
+          type: RequestType.shortage,
+          quantity: 300,
+          requestDate: DateTime.now(),
+          status: RequestStatus.approved,
+          notes: 'Post-monsoon surge in infections.'));
 
       await addRequest(MedRequest(
-        id: '', 
-        facilityId: f4Id, 
-        medicineName: 'Antibiotic', 
-        type: RequestType.surplus, 
-        quantity: 500, 
-        requestDate: DateTime.now(), 
-        status: RequestStatus.pending,
-        notes: 'Surplus stock optimization.'
-      ));
+          id: '',
+          facilityId: f4Id,
+          medicineName: 'Antibiotic',
+          type: RequestType.surplus,
+          quantity: 500,
+          requestDate: DateTime.now(),
+          status: RequestStatus.pending,
+          notes: 'Surplus stock optimization.'));
 
       // Unmatched: Paracetamol (Just for variety)
       await addRequest(MedRequest(
-        id: '', 
-        facilityId: f3Id, 
-        medicineName: 'Paracetamol', 
-        type: RequestType.regularIndent, 
-        quantity: 1200, 
-        requestDate: DateTime.now(), 
+        id: '',
+        facilityId: f3Id,
+        medicineName: 'Paracetamol',
+        type: RequestType.regularIndent,
+        quantity: 1200,
+        requestDate: DateTime.now(),
         status: RequestStatus.pending,
       ));
 

@@ -20,7 +20,7 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
   Map<String, double> _stockHealth = {};
   Map<String, int> _alertCounts = {};
   Map<String, int> _topMedicines = {};
-  
+
   int _openShortageRequests = 0;
   int _surplusOffers = 0;
   int _pendingIndents = 0;
@@ -33,7 +33,7 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
     super.initState();
     _loadData();
   }
-  
+
   @override
   void dispose() {
     _requestsSub?.cancel();
@@ -42,29 +42,34 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
 
   Future<void> _loadData() async {
     final facs = await ref.read(firebaseServiceProvider).getFacilities();
-    
+
     Map<String, double> health = {};
     Map<String, int> alerts = {};
     Map<String, int> topMeds = {};
-    
+
     for (var f in facs) {
-      final inv = await ref.read(firebaseServiceProvider).getInventoryOnce(f.id);
-      
+      final inv =
+          await ref.read(firebaseServiceProvider).getInventoryOnce(f.id);
+
       double totalInitial = 0;
       double totalRemaining = 0;
       for (var item in inv) {
         totalInitial += item.initialQuantity;
         totalRemaining += item.remainingQuantity;
-        
-        topMeds[item.medicineName] = (topMeds[item.medicineName] ?? 0) + item.remainingQuantity.toInt();
+
+        topMeds[item.medicineName] =
+            (topMeds[item.medicineName] ?? 0) + item.remainingQuantity.toInt();
       }
-      health[f.id] = totalInitial == 0 ? 100.0 : (totalRemaining / totalInitial) * 100;
-      
-      final fAlerts = await ref.read(aiServiceProvider).generateSmartAlerts(inv);
+      health[f.id] =
+          totalInitial == 0 ? 100.0 : (totalRemaining / totalInitial) * 100;
+
+      final fAlerts =
+          await ref.read(aiServiceProvider).generateSmartAlerts(inv);
       alerts[f.id] = fAlerts.length;
     }
-    
-    _requestsSub = ref.read(firebaseServiceProvider).streamRequests(null).listen((reqs) {
+
+    _requestsSub =
+        ref.read(firebaseServiceProvider).streamRequests(null).listen((reqs) {
       if (!mounted) return;
       int shortage = 0;
       int surplus = 0;
@@ -84,12 +89,12 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
     });
 
     if (mounted) {
-      setState(() { 
-        _facilities = facs; 
+      setState(() {
+        _facilities = facs;
         _stockHealth = health;
         _alertCounts = alerts;
         _topMedicines = topMeds;
-        _isLoading = false; 
+        _isLoading = false;
       });
     }
   }
@@ -111,10 +116,23 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
                     spacing: 20,
                     runSpacing: 20,
                     children: [
-                      _buildKpiCard('TOTAL FACILITIES', '${_facilities.length}', Icons.business_rounded, onTap: () {}),
-                      _buildKpiCard('OPEN SHORTAGE REQUESTS', '$_openShortageRequests', Icons.warning_amber_rounded, isAlert: true, onTap: () {}),
-                      _buildKpiCard('SURPLUS / EXPIRY OFFERS', '$_surplusOffers', Icons.swap_horiz_rounded, isAlert: false, iconColor: MediColors.warning, onTap: () {}),
-                      _buildKpiCard('PENDING INDENT APPROVALS', '$_pendingIndents', Icons.assignment_turned_in_rounded, iconColor: MediColors.info, onTap: () => context.go('/admin/approvals')),
+                      _buildKpiCard('TOTAL FACILITIES', '${_facilities.length}',
+                          Icons.business_rounded,
+                          onTap: () {}),
+                      _buildKpiCard('OPEN SHORTAGE REQUESTS',
+                          '$_openShortageRequests', Icons.warning_amber_rounded,
+                          isAlert: true, onTap: () {}),
+                      _buildKpiCard('SURPLUS / EXPIRY OFFERS',
+                          '$_surplusOffers', Icons.swap_horiz_rounded,
+                          isAlert: false,
+                          iconColor: MediColors.warning,
+                          onTap: () {}),
+                      _buildKpiCard(
+                          'PENDING INDENT APPROVALS',
+                          '$_pendingIndents',
+                          Icons.assignment_turned_in_rounded,
+                          iconColor: MediColors.info,
+                          onTap: () => context.go('/admin/approvals')),
                     ],
                   ),
                   const SizedBox(height: 36),
@@ -131,8 +149,10 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
     );
   }
 
-  Widget _buildKpiCard(String title, String value, IconData icon, {bool isAlert = false, Color? iconColor, VoidCallback? onTap}) {
-    final finalIconColor = isAlert ? MediColors.error : (iconColor ?? MediColors.info);
+  Widget _buildKpiCard(String title, String value, IconData icon,
+      {bool isAlert = false, Color? iconColor, VoidCallback? onTap}) {
+    final finalIconColor =
+        isAlert ? MediColors.error : (iconColor ?? MediColors.info);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -150,13 +170,24 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(child: Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: MediColors.textSecondary, letterSpacing: 0.5), overflow: TextOverflow.ellipsis)),
+                Expanded(
+                    child: Text(title,
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: MediColors.textSecondary,
+                            letterSpacing: 0.5),
+                        overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 8),
                 Icon(icon, color: finalIconColor, size: 20),
               ],
             ),
             const SizedBox(height: 16),
-            Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: MediColors.textPrimary)),
+            Text(value,
+                style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: MediColors.textPrimary)),
           ],
         ),
       ),
@@ -167,7 +198,11 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Facility Health Overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+        const Text('Facility Health Overview',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: MediColors.textPrimary)),
         const SizedBox(height: 16),
         Wrap(
           spacing: 16,
@@ -181,7 +216,7 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
   Widget _buildHealthCard(Facility facility) {
     final health = _stockHealth[facility.id] ?? 0;
     final alerts = _alertCounts[facility.id] ?? 0;
-    
+
     Color healthColor;
     String healthStatus;
     if (health > 70) {
@@ -209,11 +244,23 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text(facility.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: MediColors.textPrimary), overflow: TextOverflow.ellipsis)),
+              Expanded(
+                  child: Text(facility.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: MediColors.textPrimary),
+                      overflow: TextOverflow.ellipsis)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: MediColors.surfaceLight, borderRadius: BorderRadius.circular(20)),
-                child: Text(facility.type, style: const TextStyle(fontSize: 10, color: MediColors.textSecondary, fontWeight: FontWeight.w700)),
+                decoration: BoxDecoration(
+                    color: MediColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text(facility.type,
+                    style: const TextStyle(
+                        fontSize: 10,
+                        color: MediColors.textSecondary,
+                        fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -221,8 +268,14 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Stock Health', style: TextStyle(fontSize: 12, color: MediColors.textSecondary)),
-              Text('${health.round()}%', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: healthColor)),
+              const Text('Stock Health',
+                  style:
+                      TextStyle(fontSize: 12, color: MediColors.textSecondary)),
+              Text('${health.round()}%',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: healthColor)),
             ],
           ),
           const SizedBox(height: 8),
@@ -240,16 +293,28 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: healthColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                child: Text(healthStatus, style: TextStyle(color: healthColor, fontSize: 11, fontWeight: FontWeight.w700)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: healthColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text(healthStatus,
+                    style: TextStyle(
+                        color: healthColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
               ),
               if (alerts > 0)
                 Row(
                   children: [
-                    const Icon(Icons.notifications_active_rounded, color: MediColors.error, size: 14),
+                    const Icon(Icons.notifications_active_rounded,
+                        color: MediColors.error, size: 14),
                     const SizedBox(width: 4),
-                    Text('$alerts', style: const TextStyle(color: MediColors.error, fontSize: 12, fontWeight: FontWeight.w700)),
+                    Text('$alerts',
+                        style: const TextStyle(
+                            color: MediColors.error,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
                   ],
                 ),
             ],
@@ -261,13 +326,13 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
 
   Widget _buildTopMedicinesChart() {
     if (_topMedicines.isEmpty) return const SizedBox.shrink();
-    
+
     var sortedEntries = _topMedicines.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    
+
     var topEntries = sortedEntries.take(8).toList();
     if (topEntries.isEmpty) return const SizedBox.shrink();
-    
+
     final maxQty = topEntries.first.value;
 
     return Container(
@@ -280,7 +345,11 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Top Medicines by Total Units Across All Facilities', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+          const Text('Top Medicines by Total Units Across All Facilities',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: MediColors.textPrimary)),
           const SizedBox(height: 32),
           SizedBox(
             height: 200,
@@ -298,13 +367,15 @@ class _AdminOverviewState extends ConsumerState<AdminOverview> {
                         height: 150 * heightFactor,
                         decoration: const BoxDecoration(
                           color: MediColors.info,
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(4)),
                         ),
                       ),
                       const SizedBox(height: 12),
                       Text(
                         e.key,
-                        style: const TextStyle(fontSize: 10, color: MediColors.textSecondary),
+                        style: const TextStyle(
+                            fontSize: 10, color: MediColors.textSecondary),
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

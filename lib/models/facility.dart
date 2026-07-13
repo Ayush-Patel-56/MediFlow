@@ -30,8 +30,8 @@ class Facility {
       region: map['region'] ?? '',
       latitude: map['latitude']?.toDouble() ?? 0.0,
       longitude: map['longitude']?.toDouble() ?? 0.0,
-      createdAt: map['createdAt'] != null 
-          ? (map['createdAt'] as Timestamp).toDate() 
+      createdAt: map['createdAt'] != null
+          ? (map['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
     );
   }

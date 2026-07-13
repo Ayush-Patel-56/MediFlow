@@ -34,26 +34,33 @@ class OptimizationService {
     final Distance distanceCalc = const Distance();
 
     // 1. Group needs (shortage or regular indent) by medicine
-    final pendingIndents = requests.where((r) => 
-      (r.status == RequestStatus.pending || r.status == RequestStatus.approved) && 
-      (r.type == RequestType.regularIndent || r.type == RequestType.shortage)
-    ).toList();
-    
+    final pendingIndents = requests
+        .where((r) =>
+            (r.status == RequestStatus.pending ||
+                r.status == RequestStatus.approved) &&
+            (r.type == RequestType.regularIndent ||
+                r.type == RequestType.shortage))
+        .toList();
+
     // 2. Group explicit surplus offers
-    final surplusOffers = requests.where((r) => 
-      (r.status == RequestStatus.pending || r.status == RequestStatus.approved) && 
-      r.type == RequestType.surplus
-    ).toList();
-    
+    final surplusOffers = requests
+        .where((r) =>
+            (r.status == RequestStatus.pending ||
+                r.status == RequestStatus.approved) &&
+            r.type == RequestType.surplus)
+        .toList();
+
     // Track working surpluses to allow multi-fulfillment
-    Map<String, Map<String, int>> workingSurpluses = {}; // {facilityId: {medicineName: surplusQty}}
-    
+    Map<String, Map<String, int>> workingSurpluses =
+        {}; // {facilityId: {medicineName: surplusQty}}
+
     // Initialize with live inventory levels (anything above 30% is a potential surplus)
     for (var f in facilities) {
       workingSurpluses[f.id] = {};
       final inv = inventories[f.id] ?? [];
       for (var item in inv) {
-        int surplus = item.remainingQuantity - (item.initialQuantity * 0.3).toInt();
+        int surplus =
+            item.remainingQuantity - (item.initialQuantity * 0.3).toInt();
         if (surplus > 0) {
           workingSurpluses[f.id]![item.medicineName] = surplus;
         }
@@ -63,25 +70,29 @@ class OptimizationService {
     // Layer in explicit surplus offers (these take precedence or add to it)
     for (var offer in surplusOffers) {
       workingSurpluses[offer.facilityId] ??= {};
-      final current = workingSurpluses[offer.facilityId]![offer.medicineName] ?? 0;
+      final current =
+          workingSurpluses[offer.facilityId]![offer.medicineName] ?? 0;
       // Use the max of live surplus or explicit offer
       if (offer.quantity > current) {
-        workingSurpluses[offer.facilityId]![offer.medicineName] = offer.quantity;
+        workingSurpluses[offer.facilityId]![offer.medicineName] =
+            offer.quantity;
       }
     }
 
     // 2. Process each indent (Deficit)
     // Sort indents: Rural first, then by quantity (larger first)
-    final sortedIndents = List<MedRequest>.from(pendingIndents)..sort((a, b) {
-      final facA = facilities.firstWhere((f) => f.id == a.facilityId);
-      final facB = facilities.firstWhere((f) => f.id == b.facilityId);
-      if (facA.type == 'rural' && facB.type != 'rural') return -1;
-      if (facB.type == 'rural' && facA.type != 'rural') return 1;
-      return b.quantity.compareTo(a.quantity);
-    });
+    final sortedIndents = List<MedRequest>.from(pendingIndents)
+      ..sort((a, b) {
+        final facA = facilities.firstWhere((f) => f.id == a.facilityId);
+        final facB = facilities.firstWhere((f) => f.id == b.facilityId);
+        if (facA.type == 'rural' && facB.type != 'rural') return -1;
+        if (facB.type == 'rural' && facA.type != 'rural') return 1;
+        return b.quantity.compareTo(a.quantity);
+      });
 
     for (var indent in sortedIndents) {
-      final recipientFac = facilities.firstWhere((f) => f.id == indent.facilityId);
+      final recipientFac =
+          facilities.firstWhere((f) => f.id == indent.facilityId);
       final medicine = indent.medicineName;
       int remainingDeficit = indent.quantity;
 
@@ -92,7 +103,7 @@ class OptimizationService {
 
         for (var donorFac in facilities) {
           if (donorFac.id == recipientFac.id) continue;
-          
+
           final available = workingSurpluses[donorFac.id]?[medicine] ?? 0;
           if (available <= 0) continue;
 
@@ -102,9 +113,9 @@ class OptimizationService {
 
           // A. Distance Score
           final distKm = distanceCalc(
-            LatLng(donorFac.latitude, donorFac.longitude),
-            LatLng(recipientFac.latitude, recipientFac.longitude)
-          ) / 1000;
+                  LatLng(donorFac.latitude, donorFac.longitude),
+                  LatLng(recipientFac.latitude, recipientFac.longitude)) /
+              1000;
           double distScore = (200 - distKm).clamp(0, 200);
           score += distScore;
           reasons.add('Proximity (${distKm.toStringAsFixed(1)}km)');
@@ -116,7 +127,8 @@ class OptimizationService {
           }
 
           // C. Quantity Match (Bonus if donor can fulfill a lot)
-          int qtyToTake = remainingDeficit < available ? remainingDeficit : available;
+          int qtyToTake =
+              remainingDeficit < available ? remainingDeficit : available;
           if (qtyToTake == remainingDeficit) {
             score += 50;
             reasons.add('Full Fulfillment');
@@ -151,7 +163,8 @@ class OptimizationService {
 
           // Update state
           remainingDeficit -= qtyTaken;
-          workingSurpluses[donorFac.id]![medicine] = (workingSurpluses[donorFac.id]![medicine] ?? 0) - qtyTaken;
+          workingSurpluses[donorFac.id]![medicine] =
+              (workingSurpluses[donorFac.id]![medicine] ?? 0) - qtyTaken;
         } else {
           // No donors left for this medicine
           break;

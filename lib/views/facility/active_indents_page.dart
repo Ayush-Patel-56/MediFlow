@@ -46,7 +46,9 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
   Future<void> _fetchInventory() async {
     setState(() => _isLoading = true);
     try {
-      final inv = await ref.read(firebaseServiceProvider).getInventoryOnce(widget.facilityId);
+      final inv = await ref
+          .read(firebaseServiceProvider)
+          .getInventoryOnce(widget.facilityId);
       setState(() {
         _inventory = inv;
         for (var i in _inventory) {
@@ -54,7 +56,9 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
         }
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error fetching inventory: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error fetching inventory: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -64,11 +68,14 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
   Future<void> _getAIForecast() async {
     final aiService = ref.read(aiServiceProvider);
     final firebaseService = ref.read(firebaseServiceProvider);
-    final logs = await firebaseService.getRecentLogs(widget.facilityId, days: 90);
+    final logs =
+        await firebaseService.getRecentLogs(widget.facilityId, days: 90);
     for (var item in _inventory) {
       setState(() => _forecastLoading[item.id] = true);
       try {
-        final dynamic result = await aiService.forecastDemand(item.medicineName, logs, _selectedPeriod, facilityId: widget.facilityId);
+        final dynamic result = await aiService.forecastDemand(
+            item.medicineName, logs, _selectedPeriod,
+            facilityId: widget.facilityId);
         setState(() {
           var predRaw;
           var reasonRaw;
@@ -83,9 +90,11 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
             predicted = double.tryParse(predRaw)?.toInt() ?? 0;
           }
           _forecasts[item.id] = predicted;
-          _reasoning[item.id] = reasonRaw?.toString() ?? "Calculated based on demand.";
+          _reasoning[item.id] =
+              reasonRaw?.toString() ?? "Calculated based on demand.";
 
-          _analysisControllers[item.id]?.text = _suggestedQuantity(item, predicted).toString();
+          _analysisControllers[item.id]?.text =
+              _suggestedQuantity(item, predicted).toString();
         });
       } catch (e) {
         debugPrint('Forecast error for ${item.medicineName}: $e');
@@ -101,7 +110,8 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
 
     final available = item.remainingQuantity;
     final isExpired = item.expiryDate.difference(DateTime.now()).inDays < 0;
-    final expiringSoon = item.expiryDate.difference(DateTime.now()).inDays <= 30;
+    final expiringSoon =
+        item.expiryDate.difference(DateTime.now()).inDays <= 30;
 
     if (isExpired) {
       return (forecast * 1.2).round();
@@ -109,7 +119,8 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
     if (forecast > available) {
       return ((forecast - available) * 1.2).round();
     }
-    if ((available - forecast) > (forecast * 1.5) || (available > forecast && expiringSoon)) {
+    if ((available - forecast) > (forecast * 1.5) ||
+        (available > forecast && expiringSoon)) {
       final surplusQty = available - (forecast * 1.2).round();
       return surplusQty < 0 ? 0 : surplusQty;
     }
@@ -122,9 +133,11 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
 
     final available = item.remainingQuantity;
     final isExpired = item.expiryDate.difference(DateTime.now()).inDays < 0;
-    final expiringSoon = item.expiryDate.difference(DateTime.now()).inDays <= 30;
+    final expiringSoon =
+        item.expiryDate.difference(DateTime.now()).inDays <= 30;
     final hasSurplus = !isExpired &&
-        ((available - forecast) > (forecast * 1.5) || (available > forecast && expiringSoon));
+        ((available - forecast) > (forecast * 1.5) ||
+            (available > forecast && expiringSoon));
 
     if (hasSurplus) return RequestType.surplus;
     return RequestType.regularIndent;
@@ -137,17 +150,22 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
     }).toList();
 
     if (itemsToSubmit.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a request quantity for at least one medicine.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Enter a request quantity for at least one medicine.')));
       return;
     }
 
     setState(() => _isSubmitting = true);
     try {
       for (final item in itemsToSubmit) {
-        final qty = int.tryParse(_analysisControllers[item.id]?.text ?? '0') ?? 0;
+        final qty =
+            int.tryParse(_analysisControllers[item.id]?.text ?? '0') ?? 0;
         final forecast = _forecasts[item.id];
         final type = _requestTypeFor(item, forecast);
-        final action = type == RequestType.surplus ? 'Redistribution offer' : 'Restock request';
+        final action = type == RequestType.surplus
+            ? 'Redistribution offer'
+            : 'Restock request';
 
         final req = MedRequest(
           id: '',
@@ -157,16 +175,20 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
           quantity: qty,
           requestDate: DateTime.now(),
           status: RequestStatus.draft,
-          notes: '$action. AI predicted usage: ${forecast ?? "N/A"} for $_selectedPeriod days.',
+          notes:
+              '$action. AI predicted usage: ${forecast ?? "N/A"} for $_selectedPeriod days.',
         );
         await ref.read(firebaseServiceProvider).addRequest(req);
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Requests saved as drafts.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Requests saved as drafts.')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -176,9 +198,13 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
   Future<void> _updateQuantity(String requestId, int quantity) async {
     setState(() => _isDraftActionInProgress = true);
     try {
-      await ref.read(firebaseServiceProvider).updateRequestQuantity(requestId, quantity);
+      await ref
+          .read(firebaseServiceProvider)
+          .updateRequestQuantity(requestId, quantity);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Update failed: $e')));
     } finally {
       if (mounted) setState(() => _isDraftActionInProgress = false);
     }
@@ -189,7 +215,9 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
     try {
       await ref.read(firebaseServiceProvider).deleteRequest(requestId);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     } finally {
       if (mounted) setState(() => _isDraftActionInProgress = false);
     }
@@ -198,31 +226,71 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
   Future<void> _finalSubmit(String requestId) async {
     setState(() => _isDraftActionInProgress = true);
     try {
-      await ref.read(firebaseServiceProvider).updateRequestStatus(requestId, RequestStatus.pending);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request sent to CMS! ✓')));
+      await ref
+          .read(firebaseServiceProvider)
+          .updateRequestStatus(requestId, RequestStatus.pending);
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Request sent to CMS! ✓')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Submission failed: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Submission failed: $e')));
     } finally {
       if (mounted) setState(() => _isDraftActionInProgress = false);
     }
   }
 
   // ---------- UI Helpers ----------
-  Widget _sectionHeader(String title) => Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: MediColors.textPrimary));
+  Widget _sectionHeader(String title) => Text(title,
+      style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: MediColors.textPrimary));
 
   // ----- AI Table -----
   Widget _analysisHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: const BoxDecoration(color: MediColors.surfaceLight, borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      decoration: const BoxDecoration(
+          color: MediColors.surfaceLight,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       child: const Row(
         children: [
-          SizedBox(width: 40, child: Icon(Icons.check_box_outline_blank, color: MediColors.textMuted, size: 20)),
-          Expanded(flex: 3, child: Text('Medicine', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('Available', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('AI Predicted Usage', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('Status', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('Request Qty', style: TextStyle(color: MediColors.textSecondary, fontWeight: FontWeight.bold))),
+          SizedBox(
+              width: 40,
+              child: Icon(Icons.check_box_outline_blank,
+                  color: MediColors.textMuted, size: 20)),
+          Expanded(
+              flex: 3,
+              child: Text('Medicine',
+                  style: TextStyle(
+                      color: MediColors.textSecondary,
+                      fontWeight: FontWeight.bold))),
+          Expanded(
+              flex: 2,
+              child: Text('Available',
+                  style: TextStyle(
+                      color: MediColors.textSecondary,
+                      fontWeight: FontWeight.bold))),
+          Expanded(
+              flex: 2,
+              child: Text('AI Predicted Usage',
+                  style: TextStyle(
+                      color: MediColors.textSecondary,
+                      fontWeight: FontWeight.bold))),
+          Expanded(
+              flex: 2,
+              child: Text('Status',
+                  style: TextStyle(
+                      color: MediColors.textSecondary,
+                      fontWeight: FontWeight.bold))),
+          Expanded(
+              flex: 2,
+              child: Text('Request Qty',
+                  style: TextStyle(
+                      color: MediColors.textSecondary,
+                      fontWeight: FontWeight.bold))),
         ],
       ),
     );
@@ -252,7 +320,9 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
         statusColor = MediColors.error;
         statusBg = MediColors.error.withValues(alpha: 0.1);
         statusIcon = Icons.trending_down_rounded;
-      } else if (forecast > 0 && ((available - forecast) > (forecast * 1.5) || (available > forecast && expiringSoon))) {
+      } else if (forecast > 0 &&
+          ((available - forecast) > (forecast * 1.5) ||
+              (available > forecast && expiringSoon))) {
         status = "SURPLUS";
         statusColor = MediColors.success;
         statusBg = MediColors.success.withValues(alpha: 0.1);
@@ -269,22 +339,42 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         children: [
-          SizedBox(width: 40, child: Checkbox(value: true, onChanged: (v) {}, activeColor: MediColors.surfaceLight, checkColor: MediColors.textPrimary, side: const BorderSide(color: MediColors.textMuted))),
+          SizedBox(
+              width: 40,
+              child: Checkbox(
+                  value: true,
+                  onChanged: (v) {},
+                  activeColor: MediColors.surfaceLight,
+                  checkColor: MediColors.textPrimary,
+                  side: const BorderSide(color: MediColors.textMuted))),
           Expanded(
             flex: 3,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textPrimary)),
-                Text(item.batchId, style: const TextStyle(color: MediColors.textSecondary, fontSize: 12)),
+                Text(item.medicineName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: MediColors.textPrimary)),
+                Text(item.batchId,
+                    style: const TextStyle(
+                        color: MediColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
-          Expanded(flex: 2, child: Text(available.toString(), style: const TextStyle(color: MediColors.textPrimary, fontWeight: FontWeight.bold))),
+          Expanded(
+              flex: 2,
+              child: Text(available.toString(),
+                  style: const TextStyle(
+                      color: MediColors.textPrimary,
+                      fontWeight: FontWeight.bold))),
           Expanded(
             flex: 2,
             child: isLoading
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : Tooltip(
                     message: reasoning ?? "AI reasoning will appear here.",
                     child: Row(
@@ -292,9 +382,19 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                       children: [
                         Text(
                           forecast != null ? forecast.toString() : '—',
-                          style: TextStyle(color: forecast != null ? MediColors.primaryLight : MediColors.textMuted, fontWeight: forecast != null ? FontWeight.bold : FontWeight.normal),
+                          style: TextStyle(
+                              color: forecast != null
+                                  ? MediColors.primaryLight
+                                  : MediColors.textMuted,
+                              fontWeight: forecast != null
+                                  ? FontWeight.bold
+                                  : FontWeight.normal),
                         ),
-                        if (forecast != null) ...[const SizedBox(width: 6), const Icon(Icons.info_outline, color: MediColors.primaryLight, size: 14)],
+                        if (forecast != null) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.info_outline,
+                              color: MediColors.primaryLight, size: 14)
+                        ],
                       ],
                     ),
                   ),
@@ -305,13 +405,18 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
               alignment: Alignment.centerLeft,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(
+                    color: statusBg, borderRadius: BorderRadius.circular(6)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(statusIcon, color: statusColor, size: 14),
                     const SizedBox(width: 6),
-                    Text(status, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                    Text(status,
+                        style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -321,7 +426,10 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
             flex: 2,
             child: Container(
               height: 40,
-              decoration: BoxDecoration(color: MediColors.surfaceLight, borderRadius: BorderRadius.circular(20), border: Border.all(color: MediColors.border)),
+              decoration: BoxDecoration(
+                  color: MediColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: MediColors.border)),
               child: Row(
                 children: [
                   Expanded(
@@ -329,11 +437,18 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                       controller: _analysisControllers[item.id],
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14, color: MediColors.textPrimary),
-                      decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
+                      style: const TextStyle(
+                          fontSize: 14, color: MediColors.textPrimary),
+                      decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero),
                     ),
                   ),
-                  Padding(padding: const EdgeInsets.only(right: 12.0), child: Text(item.unit, style: const TextStyle(color: MediColors.textMuted, fontSize: 11))),
+                  Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: Text(item.unit,
+                          style: const TextStyle(
+                              color: MediColors.textMuted, fontSize: 11))),
                 ],
               ),
             ),
@@ -346,21 +461,35 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
   // ----- Drafts List -----
   Widget _draftsList() {
     return StreamBuilder<List<MedRequest>>(
-      stream: ref.read(firebaseServiceProvider).streamRequests(widget.facilityId),
+      stream:
+          ref.read(firebaseServiceProvider).streamRequests(widget.facilityId),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: MediColors.error)));
-        final drafts = snapshot.data?.where((r) => r.status == RequestStatus.draft).toList() ?? [];
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError)
+          return Center(
+              child: Text('Error: ${snapshot.error}',
+                  style: const TextStyle(color: MediColors.error)));
+        final drafts = snapshot.data
+                ?.where((r) => r.status == RequestStatus.draft)
+                .toList() ??
+            [];
         if (drafts.isEmpty) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.inbox_rounded, size: 64, color: MediColors.textMuted.withValues(alpha: 0.5)),
+                Icon(Icons.inbox_rounded,
+                    size: 64,
+                    color: MediColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
-                const Text('No pending requests.', style: TextStyle(color: MediColors.textSecondary, fontSize: 16)),
+                const Text('No pending requests.',
+                    style: TextStyle(
+                        color: MediColors.textSecondary, fontSize: 16)),
                 const SizedBox(height: 8),
-                const Text('Use the AI analysis above to create new requests.', style: TextStyle(color: MediColors.textMuted, fontSize: 13)),
+                const Text('Use the AI analysis above to create new requests.',
+                    style:
+                        TextStyle(color: MediColors.textMuted, fontSize: 13)),
               ],
             ),
           );
@@ -377,7 +506,8 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
               itemBuilder: (context, idx) {
                 final draft = drafts[idx];
                 if (!_draftControllers.containsKey(draft.id)) {
-                  _draftControllers[draft.id] = TextEditingController(text: draft.quantity.toString());
+                  _draftControllers[draft.id] =
+                      TextEditingController(text: draft.quantity.toString());
                 }
                 return Card(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -391,32 +521,60 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(draft.medicineName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: MediColors.textPrimary)),
+                              Text(draft.medicineName,
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: MediColors.textPrimary)),
                               const SizedBox(height: 4),
-                              Text('Created: ${draft.requestDate.day}/${draft.requestDate.month}/${draft.requestDate.year}', style: const TextStyle(fontSize: 12, color: MediColors.textMuted)),
+                              Text(
+                                  'Created: ${draft.requestDate.day}/${draft.requestDate.month}/${draft.requestDate.year}',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: MediColors.textMuted)),
                               if (draft.notes != null) ...[
                                 const SizedBox(height: 8),
-                                Text(draft.notes!, style: const TextStyle(fontSize: 12, color: MediColors.info, fontStyle: FontStyle.italic)),
+                                Text(draft.notes!,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: MediColors.info,
+                                        fontStyle: FontStyle.italic)),
                               ],
                               const SizedBox(height: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: draft.type == RequestType.surplus ? MediColors.success.withValues(alpha: 0.1) : MediColors.error.withValues(alpha: 0.1),
+                                  color: draft.type == RequestType.surplus
+                                      ? MediColors.success
+                                          .withValues(alpha: 0.1)
+                                      : MediColors.error.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      draft.type == RequestType.surplus ? Icons.arrow_upward_rounded : Icons.trending_down_rounded,
-                                      color: draft.type == RequestType.surplus ? MediColors.success : MediColors.error,
+                                      draft.type == RequestType.surplus
+                                          ? Icons.arrow_upward_rounded
+                                          : Icons.trending_down_rounded,
+                                      color: draft.type == RequestType.surplus
+                                          ? MediColors.success
+                                          : MediColors.error,
                                       size: 12,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      draft.type == RequestType.surplus ? 'Offering Redistribution' : 'Requesting Restock',
-                                      style: TextStyle(color: draft.type == RequestType.surplus ? MediColors.success : MediColors.error, fontSize: 11, fontWeight: FontWeight.bold),
+                                      draft.type == RequestType.surplus
+                                          ? 'Offering Redistribution'
+                                          : 'Requesting Restock',
+                                      style: TextStyle(
+                                          color:
+                                              draft.type == RequestType.surplus
+                                                  ? MediColors.success
+                                                  : MediColors.error,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
@@ -429,7 +587,9 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                           flex: 2,
                           child: Row(
                             children: [
-                              const Text('Request Qty: ', style: TextStyle(color: MediColors.textSecondary)),
+                              const Text('Request Qty: ',
+                                  style: TextStyle(
+                                      color: MediColors.textSecondary)),
                               const SizedBox(width: 8),
                               SizedBox(
                                 width: 80,
@@ -438,9 +598,16 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                                   controller: _draftControllers[draft.id],
                                   keyboardType: TextInputType.number,
                                   style: const TextStyle(fontSize: 14),
-                                  decoration: InputDecoration(contentPadding: const EdgeInsets.symmetric(horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                                  decoration: InputDecoration(
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 10),
+                                      border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8))),
                                   onSubmitted: (val) {
-                                    final qty = int.tryParse(val) ?? draft.quantity;
+                                    final qty =
+                                        int.tryParse(val) ?? draft.quantity;
                                     _updateQuantity(draft.id, qty);
                                   },
                                 ),
@@ -452,13 +619,23 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(icon: const Icon(Icons.delete_outline_rounded, color: MediColors.error), onPressed: _isDraftActionInProgress ? null : () => _deleteDraft(draft.id), tooltip: 'Remove Draft'),
+                            IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    color: MediColors.error),
+                                onPressed: _isDraftActionInProgress
+                                    ? null
+                                    : () => _deleteDraft(draft.id),
+                                tooltip: 'Remove Draft'),
                             const SizedBox(width: 8),
                             FilledButton.icon(
-                              onPressed: _isDraftActionInProgress ? null : () => _finalSubmit(draft.id),
+                              onPressed: _isDraftActionInProgress
+                                  ? null
+                                  : () => _finalSubmit(draft.id),
                               icon: const Icon(Icons.send_rounded, size: 16),
                               label: const Text('Submit to CMS'),
-                              style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                              style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12)),
                             ),
                           ],
                         ),
@@ -495,14 +672,24 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                     children: [
                       _sectionHeader('Select Period'),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        decoration: BoxDecoration(border: Border.all(color: MediColors.border), borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
+                        decoration: BoxDecoration(
+                            border: Border.all(color: MediColors.border),
+                            borderRadius: BorderRadius.circular(12)),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<int>(
                             value: _selectedPeriod,
                             dropdownColor: MediColors.surface,
-                            items: [30, 60, 90].map((int v) => DropdownMenuItem<int>(value: v, child: Text('$v days', style: const TextStyle(color: MediColors.textPrimary)))).toList(),
-                            onChanged: (val) => setState(() => _selectedPeriod = val ?? _selectedPeriod),
+                            items: [30, 60, 90]
+                                .map((int v) => DropdownMenuItem<int>(
+                                    value: v,
+                                    child: Text('$v days',
+                                        style: const TextStyle(
+                                            color: MediColors.textPrimary))))
+                                .toList(),
+                            onChanged: (val) => setState(
+                                () => _selectedPeriod = val ?? _selectedPeriod),
                           ),
                         ),
                       ),
@@ -511,12 +698,19 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      FilledButton.icon(onPressed: _getAIForecast, icon: const Icon(Icons.auto_awesome, size: 18), label: const Text('Get AI Forecast')),
+                      FilledButton.icon(
+                          onPressed: _getAIForecast,
+                          icon: const Icon(Icons.auto_awesome, size: 18),
+                          label: const Text('Get AI Forecast')),
                       const SizedBox(width: 12),
                       OutlinedButton.icon(
                         onPressed: _isSubmitting ? null : _saveAnalysisAsDrafts,
                         icon: _isSubmitting
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.save_alt_rounded, size: 18),
                         label: const Text('Save Draft Requests'),
                       ),
@@ -532,7 +726,8 @@ class _ActiveIndentsPageState extends ConsumerState<ActiveIndentsPage> {
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: _inventory.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (_, idx) => _analysisRow(_inventory[idx]),
+                          itemBuilder: (_, idx) =>
+                              _analysisRow(_inventory[idx]),
                         ),
                       ],
                     ),

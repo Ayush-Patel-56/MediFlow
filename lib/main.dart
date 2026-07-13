@@ -31,13 +31,16 @@ import 'views/admin/admin_indent_approval_page.dart';
 import 'views/admin/admin_indent_status_page.dart';
 import 'views/admin/route_optimization_map.dart';
 import 'views/shared/ai_chat_page.dart';
+
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
-final GlobalKey<NavigatorState> _facilityShellNavigatorKey = GlobalKey<NavigatorState>();
-final GlobalKey<NavigatorState> _adminShellNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> _facilityShellNavigatorKey =
+    GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> _adminShellNavigatorKey =
+    GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase immediately with hardcoded options
   try {
     await Firebase.initializeApp(
@@ -99,17 +102,41 @@ final _router = GoRouter(
       navigatorKey: _facilityShellNavigatorKey,
       builder: (context, state, child) {
         final pathParams = state.pathParameters;
-        return SidebarLayout(role: 'facility', facilityId: pathParams['id'], child: child);
+        return SidebarLayout(
+            role: 'facility', facilityId: pathParams['id'], child: child);
       },
       routes: [
-        GoRoute(path: '/facility/:id/overview', builder: (context, state) => FacilityOverview(facilityId: state.pathParameters['id']!)),
-        GoRoute(path: '/facility/:id/forecast', builder: (context, state) => AIForecastPage(facilityId: state.pathParameters['id']!)),
-        GoRoute(path: '/facility/:id/indent', builder: (context, state) => ActiveIndentsPage(facilityId: state.pathParameters['id']!)),
-        GoRoute(path: '/facility/:id/active-indents', builder: (context, state) => ActiveIndentsPage(facilityId: state.pathParameters['id']!)),
-        GoRoute(path: '/facility/:id/logging', builder: (context, state) => DailyLoggingPage(facilityId: state.pathParameters['id']!)),
-        GoRoute(path: '/facility/:id/alerts', builder: (context, state) => AlertsPage(facilityId: state.pathParameters['id']!)),
-        GoRoute(path: '/facility/:id/chat', builder: (context, state) => AIChatPage(facilityId: state.pathParameters['id']!, role: 'facility')),
-        GoRoute(path: '/facility/:id/help', builder: (context, state) => HelpPage(role: 'facility')),
+        GoRoute(
+            path: '/facility/:id/overview',
+            builder: (context, state) =>
+                FacilityOverview(facilityId: state.pathParameters['id']!)),
+        GoRoute(
+            path: '/facility/:id/forecast',
+            builder: (context, state) =>
+                AIForecastPage(facilityId: state.pathParameters['id']!)),
+        GoRoute(
+            path: '/facility/:id/indent',
+            builder: (context, state) =>
+                ActiveIndentsPage(facilityId: state.pathParameters['id']!)),
+        GoRoute(
+            path: '/facility/:id/active-indents',
+            builder: (context, state) =>
+                ActiveIndentsPage(facilityId: state.pathParameters['id']!)),
+        GoRoute(
+            path: '/facility/:id/logging',
+            builder: (context, state) =>
+                DailyLoggingPage(facilityId: state.pathParameters['id']!)),
+        GoRoute(
+            path: '/facility/:id/alerts',
+            builder: (context, state) =>
+                AlertsPage(facilityId: state.pathParameters['id']!)),
+        GoRoute(
+            path: '/facility/:id/chat',
+            builder: (context, state) => AIChatPage(
+                facilityId: state.pathParameters['id']!, role: 'facility')),
+        GoRoute(
+            path: '/facility/:id/help',
+            builder: (context, state) => HelpPage(role: 'facility')),
       ],
     ),
     ShellRoute(
@@ -118,12 +145,24 @@ final _router = GoRouter(
         return SidebarLayout(role: 'admin', child: child);
       },
       routes: [
-        GoRoute(path: '/admin/overview', builder: (context, state) => const AdminOverview()),
-        GoRoute(path: '/admin/approvals', builder: (context, state) => const AdminIndentApprovalPage()),
-        GoRoute(path: '/admin/supply-status', builder: (context, state) => const AdminIndentStatusPage()),
-        GoRoute(path: '/admin/routing', builder: (context, state) => const RouteOptimizationMap()),
-        GoRoute(path: '/admin/chat', builder: (context, state) => const AIChatPage(role: 'admin')),
-        GoRoute(path: '/admin/help', builder: (context, state) => const HelpPage(role: 'admin')),
+        GoRoute(
+            path: '/admin/overview',
+            builder: (context, state) => const AdminOverview()),
+        GoRoute(
+            path: '/admin/approvals',
+            builder: (context, state) => const AdminIndentApprovalPage()),
+        GoRoute(
+            path: '/admin/supply-status',
+            builder: (context, state) => const AdminIndentStatusPage()),
+        GoRoute(
+            path: '/admin/routing',
+            builder: (context, state) => const RouteOptimizationMap()),
+        GoRoute(
+            path: '/admin/chat',
+            builder: (context, state) => const AIChatPage(role: 'admin')),
+        GoRoute(
+            path: '/admin/help',
+            builder: (context, state) => const HelpPage(role: 'admin')),
       ],
     ),
   ],
@@ -195,8 +234,10 @@ class MediFlowApp extends StatelessWidget {
             backgroundColor: MediColors.primary,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            textStyle:
+                const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
@@ -204,14 +245,17 @@ class MediFlowApp extends StatelessWidget {
             foregroundColor: MediColors.primary,
             side: const BorderSide(color: MediColors.border),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
-        dividerTheme: const DividerThemeData(color: MediColors.border, thickness: 1),
+        dividerTheme:
+            const DividerThemeData(color: MediColors.border, thickness: 1),
         snackBarTheme: SnackBarThemeData(
           backgroundColor: MediColors.surfaceLight,
           contentTextStyle: const TextStyle(color: MediColors.textPrimary),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           behavior: SnackBarBehavior.floating,
         ),
         popupMenuTheme: PopupMenuThemeData(
@@ -223,8 +267,12 @@ class MediFlowApp extends StatelessWidget {
         ),
         dialogTheme: DialogThemeData(
           backgroundColor: MediColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          titleTextStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: MediColors.textPrimary),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          titleTextStyle: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: MediColors.textPrimary),
         ),
         tabBarTheme: TabBarThemeData(
           labelColor: MediColors.primary,
@@ -233,15 +281,22 @@ class MediFlowApp extends StatelessWidget {
           dividerColor: MediColors.border,
         ),
         dataTableTheme: DataTableThemeData(
-          headingTextStyle: const TextStyle(fontWeight: FontWeight.w600, color: MediColors.textSecondary, fontSize: 13),
-          dataTextStyle: const TextStyle(color: MediColors.textPrimary, fontSize: 13),
+          headingTextStyle: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: MediColors.textSecondary,
+              fontSize: 13),
+          dataTextStyle:
+              const TextStyle(color: MediColors.textPrimary, fontSize: 13),
           headingRowColor: WidgetStateProperty.all(MediColors.surfaceLight),
           dataRowColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.hovered)) return MediColors.surfaceHover;
+            if (states.contains(WidgetState.hovered))
+              return MediColors.surfaceHover;
             return Colors.transparent;
           }),
           dividerThickness: 1,
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: MediColors.border, width: 0.5))),
+          decoration: const BoxDecoration(
+              border: Border(
+                  bottom: BorderSide(color: MediColors.border, width: 0.5))),
         ),
       ),
       routerConfig: _router,

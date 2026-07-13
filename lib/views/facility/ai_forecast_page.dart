@@ -24,18 +24,29 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
   bool _isLoadingHistory = false;
 
   Future<void> _loadHistoricalData(String medicineName) async {
-    setState(() { _isLoadingHistory = true; _historicalData = []; _forecastResult = null; });
+    setState(() {
+      _isLoadingHistory = true;
+      _historicalData = [];
+      _forecastResult = null;
+    });
     try {
-      final logs = await ref.read(firebaseServiceProvider).getRecentLogs(widget.facilityId, days: 30);
+      final logs = await ref
+          .read(firebaseServiceProvider)
+          .getRecentLogs(widget.facilityId, days: 30);
       final sorted = [...logs]..sort((a, b) => a.date.compareTo(b.date));
       final data = sorted.map((log) {
         final usage = log.medicines.firstWhere(
           (m) => m.medicineName == medicineName,
-          orElse: () => MedicineUsage(medicineName: medicineName, unitsDistributed: 0),
+          orElse: () =>
+              MedicineUsage(medicineName: medicineName, unitsDistributed: 0),
         );
         return usage.unitsDistributed.toDouble();
       }).toList();
-      if (mounted) setState(() { _historicalData = data; _isLoadingHistory = false; });
+      if (mounted)
+        setState(() {
+          _historicalData = data;
+          _isLoadingHistory = false;
+        });
     } catch (e) {
       if (mounted) setState(() => _isLoadingHistory = false);
     }
@@ -43,7 +54,8 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
 
   @override
   Widget build(BuildContext context) {
-    final inventoryStream = ref.watch(firebaseServiceProvider).streamInventory(widget.facilityId);
+    final inventoryStream =
+        ref.watch(firebaseServiceProvider).streamInventory(widget.facilityId);
 
     return Scaffold(
       backgroundColor: MediColors.bg,
@@ -51,13 +63,16 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
       body: StreamBuilder<List<InventoryItem>>(
         stream: inventoryStream,
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
           final inventory = snapshot.data ?? [];
-          final medNames = inventory.map((i) => i.medicineName).toSet().toList();
+          final medNames =
+              inventory.map((i) => i.medicineName).toSet().toList();
 
           if (_selectedMed == null && medNames.isNotEmpty) {
             _selectedMed = medNames.first;
-            WidgetsBinding.instance.addPostFrameCallback((_) => _loadHistoricalData(_selectedMed!));
+            WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _loadHistoricalData(_selectedMed!));
           }
 
           return LayoutBuilder(builder: (context, constraints) {
@@ -68,23 +83,40 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
                 color: MediColors.surface,
-                border: Border(right: isWide ? BorderSide(color: MediColors.border) : BorderSide.none),
+                border: Border(
+                    right: isWide
+                        ? BorderSide(color: MediColors.border)
+                        : BorderSide.none),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Parameters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+                  const Text('Parameters',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: MediColors.textPrimary)),
                   const SizedBox(height: 8),
-                  const Text('Configure your forecast model', style: TextStyle(fontSize: 13, color: MediColors.textMuted)),
+                  const Text('Configure your forecast model',
+                      style:
+                          TextStyle(fontSize: 13, color: MediColors.textMuted)),
                   const SizedBox(height: 28),
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: 'Medicine'),
                     dropdownColor: MediColors.surfaceLight,
                     value: _selectedMed,
                     style: const TextStyle(color: MediColors.textPrimary),
-                    items: medNames.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                    onChanged: (v) { setState(() { _selectedMed = v; _forecastResult = null; }); if (v != null) _loadHistoricalData(v); },
+                    items: medNames
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                        .toList(),
+                    onChanged: (v) {
+                      setState(() {
+                        _selectedMed = v;
+                        _forecastResult = null;
+                      });
+                      if (v != null) _loadHistoricalData(v);
+                    },
                   ),
                   const SizedBox(height: 20),
                   DropdownButtonFormField<int>(
@@ -93,28 +125,53 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                     value: _forecastDays,
                     style: const TextStyle(color: MediColors.textPrimary),
                     items: const [
-                      DropdownMenuItem(value: 30, child: Text('1 Month (30 Days)')),
-                      DropdownMenuItem(value: 90, child: Text('1 Quarter (90 Days)')),
+                      DropdownMenuItem(
+                          value: 30, child: Text('1 Month (30 Days)')),
+                      DropdownMenuItem(
+                          value: 90, child: Text('1 Quarter (90 Days)')),
                     ],
-                    onChanged: (v) => setState(() { _forecastDays = v!; _forecastResult = null; }),
+                    onChanged: (v) => setState(() {
+                      _forecastDays = v!;
+                      _forecastResult = null;
+                    }),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
-                    width: double.infinity, height: 50,
+                    width: double.infinity,
+                    height: 50,
                     child: Container(
-                      decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(
+                          gradient: MediColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(12)),
                       child: FilledButton.icon(
-                        style: FilledButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent),
+                        style: FilledButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent),
                         icon: _isForecasting
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.auto_awesome_rounded),
                         label: const Text('Generate Forecast'),
-                        onPressed: _isForecasting ? null : () async {
-                          setState(() => _isForecasting = true);
-                          final logs = await ref.read(firebaseServiceProvider).getRecentLogs(widget.facilityId);
-                          final result = await ref.read(aiServiceProvider).forecastDemand(_selectedMed!, logs, _forecastDays, facilityId: widget.facilityId);
-                          setState(() { _forecastResult = result; _isForecasting = false; });
-                        },
+                        onPressed: _isForecasting
+                            ? null
+                            : () async {
+                                setState(() => _isForecasting = true);
+                                final logs = await ref
+                                    .read(firebaseServiceProvider)
+                                    .getRecentLogs(widget.facilityId);
+                                final result = await ref
+                                    .read(aiServiceProvider)
+                                    .forecastDemand(
+                                        _selectedMed!, logs, _forecastDays,
+                                        facilityId: widget.facilityId);
+                                setState(() {
+                                  _forecastResult = result;
+                                  _isForecasting = false;
+                                });
+                              },
                       ),
                     ),
                   ),
@@ -125,12 +182,16 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                       decoration: BoxDecoration(
                         color: MediColors.success.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: MediColors.success.withValues(alpha: 0.2)),
+                        border: Border.all(
+                            color: MediColors.success.withValues(alpha: 0.2)),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.check_circle_rounded, color: MediColors.success, size: 16),
+                        const Icon(Icons.check_circle_rounded,
+                            color: MediColors.success, size: 16),
                         const SizedBox(width: 8),
-                        Text('${_historicalData.length} days loaded', style: const TextStyle(color: MediColors.success, fontSize: 12)),
+                        Text('${_historicalData.length} days loaded',
+                            style: const TextStyle(
+                                color: MediColors.success, fontSize: 12)),
                       ]),
                     ),
                   ],
@@ -154,13 +215,23 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(children: [
-                        const Text('Usage Trend', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+                        const Text('Usage Trend',
+                            style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: MediColors.textPrimary)),
                         const Spacer(),
                         _buildLegendDot(MediColors.info, 'Historical'),
-                        if (_forecastResult != null) ...[const SizedBox(width: 16), _buildLegendDot(MediColors.violet, 'Forecast')],
+                        if (_forecastResult != null) ...[
+                          const SizedBox(width: 16),
+                          _buildLegendDot(MediColors.violet, 'Forecast')
+                        ],
                       ]),
                       const SizedBox(height: 20),
-                      Expanded(child: _isLoadingHistory ? const Center(child: CircularProgressIndicator()) : _buildChart()),
+                      Expanded(
+                          child: _isLoadingHistory
+                              ? const Center(child: CircularProgressIndicator())
+                              : _buildChart()),
                     ],
                   ),
                 ),
@@ -172,36 +243,58 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
                   decoration: BoxDecoration(
                     color: MediColors.primary.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: MediColors.primary.withValues(alpha: 0.15)),
+                    border: Border.all(
+                        color: MediColors.primary.withValues(alpha: 0.15)),
                   ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(10)),
-                        child: const Icon(Icons.psychology_rounded, color: Colors.white, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text('AI Insight', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: MediColors.primary)),
-                    ]),
-                    const SizedBox(height: 16),
-                    if (_forecastResult == null)
-                      const Text('Run the forecaster to see AI-powered demand predictions.', style: TextStyle(color: MediColors.textSecondary))
-                    else ...[
-                      Text('Predicted: ${_forecastResult!['prediction']} units over $_forecastDays days',
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: MediColors.primary)),
-                      const SizedBox(height: 8),
-                      Text('${_forecastResult!['reasoning']}', style: const TextStyle(color: MediColors.textSecondary, height: 1.6)),
-                    ],
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                                gradient: MediColors.primaryGradient,
+                                borderRadius: BorderRadius.circular(10)),
+                            child: const Icon(Icons.psychology_rounded,
+                                color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text('AI Insight',
+                              style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: MediColors.primary)),
+                        ]),
+                        const SizedBox(height: 16),
+                        if (_forecastResult == null)
+                          const Text(
+                              'Run the forecaster to see AI-powered demand predictions.',
+                              style: TextStyle(color: MediColors.textSecondary))
+                        else ...[
+                          Text(
+                              'Predicted: ${_forecastResult!['prediction']} units over $_forecastDays days',
+                              style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: MediColors.primary)),
+                          const SizedBox(height: 8),
+                          Text('${_forecastResult!['reasoning']}',
+                              style: const TextStyle(
+                                  color: MediColors.textSecondary,
+                                  height: 1.6)),
+                        ],
+                      ]),
                 ),
               ]),
             );
 
             if (isWide) {
-              return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [controls, Expanded(child: mainContent)]);
+              return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [controls, Expanded(child: mainContent)]);
             }
-            return SingleChildScrollView(child: Column(children: [controls, mainContent]));
+            return SingleChildScrollView(
+                child: Column(children: [controls, mainContent]));
           });
         },
       ),
@@ -210,15 +303,24 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
 
   Widget _buildLegendDot(Color color, String label) {
     return Row(children: [
-      Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+      Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+              color: color, borderRadius: BorderRadius.circular(3))),
       const SizedBox(width: 6),
-      Text(label, style: const TextStyle(fontSize: 12, color: MediColors.textMuted)),
+      Text(label,
+          style: const TextStyle(fontSize: 12, color: MediColors.textMuted)),
     ]);
   }
 
   Widget _buildChart() {
     final historicalSpots = _historicalData.isNotEmpty
-        ? _historicalData.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList()
+        ? _historicalData
+            .asMap()
+            .entries
+            .map((e) => FlSpot(e.key.toDouble(), e.value))
+            .toList()
         : <FlSpot>[FlSpot(0, 0)];
 
     List<FlSpot> forecastSpots = [];
@@ -235,31 +337,48 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
     }
 
     final maxY = [
-      if (_historicalData.isNotEmpty) _historicalData.reduce((a, b) => a > b ? a : b),
-      if (forecastSpots.isNotEmpty) forecastSpots.map((s) => s.y).reduce((a, b) => a > b ? a : b),
-      1.0,
-    ].reduce((a, b) => a > b ? a : b) * 1.2;
+          if (_historicalData.isNotEmpty)
+            _historicalData.reduce((a, b) => a > b ? a : b),
+          if (forecastSpots.isNotEmpty)
+            forecastSpots.map((s) => s.y).reduce((a, b) => a > b ? a : b),
+          1.0,
+        ].reduce((a, b) => a > b ? a : b) *
+        1.2;
 
     return LineChart(LineChartData(
-      minY: 0, maxY: maxY,
+      minY: 0,
+      maxY: maxY,
       gridData: FlGridData(
-        show: true, drawVerticalLine: false,
-        getDrawingHorizontalLine: (value) => FlLine(color: MediColors.border, strokeWidth: 0.5),
+        show: true,
+        drawVerticalLine: false,
+        getDrawingHorizontalLine: (value) =>
+            FlLine(color: MediColors.border, strokeWidth: 0.5),
       ),
       titlesData: FlTitlesData(
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        leftTitles: AxisTitles(sideTitles: SideTitles(
-          showTitles: true, reservedSize: 40,
-          getTitlesWidget: (v, _) => Text(v.toStringAsFixed(0), style: const TextStyle(fontSize: 10, color: MediColors.textMuted)),
+        leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 40,
+          getTitlesWidget: (v, _) => Text(v.toStringAsFixed(0),
+              style:
+                  const TextStyle(fontSize: 10, color: MediColors.textMuted)),
         )),
-        bottomTitles: AxisTitles(sideTitles: SideTitles(
-          showTitles: true, reservedSize: 28,
+        bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 28,
           getTitlesWidget: (v, _) {
             final idx = v.toInt();
             if (_historicalData.isEmpty) return const Text('');
-            if (idx == 0) return const Text('D-30', style: TextStyle(fontSize: 10, color: MediColors.textMuted));
-            if (idx == _historicalData.length - 1) return const Text('Today', style: TextStyle(fontSize: 10, color: MediColors.textMuted));
+            if (idx == 0)
+              return const Text('D-30',
+                  style: TextStyle(fontSize: 10, color: MediColors.textMuted));
+            if (idx == _historicalData.length - 1)
+              return const Text('Today',
+                  style: TextStyle(fontSize: 10, color: MediColors.textMuted));
             return const Text('');
           },
         )),
@@ -267,14 +386,24 @@ class _AIForecastPageState extends ConsumerState<AIForecastPage> {
       borderData: FlBorderData(show: false),
       lineBarsData: [
         LineChartBarData(
-          spots: historicalSpots, isCurved: true, color: MediColors.info, barWidth: 2.5, isStrokeCapRound: true,
+          spots: historicalSpots,
+          isCurved: true,
+          color: MediColors.info,
+          barWidth: 2.5,
+          isStrokeCapRound: true,
           dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(show: true, color: MediColors.info.withValues(alpha: 0.08)),
+          belowBarData: BarAreaData(
+              show: true, color: MediColors.info.withValues(alpha: 0.08)),
         ),
         if (forecastSpots.isNotEmpty)
           LineChartBarData(
-            spots: forecastSpots, isCurved: true, color: MediColors.violet, barWidth: 2.5, isStrokeCapRound: true,
-            dashArray: [6, 4], dotData: const FlDotData(show: false),
+            spots: forecastSpots,
+            isCurved: true,
+            color: MediColors.violet,
+            barWidth: 2.5,
+            isStrokeCapRound: true,
+            dashArray: [6, 4],
+            dotData: const FlDotData(show: false),
           ),
       ],
     ));

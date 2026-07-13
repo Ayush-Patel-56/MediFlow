@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum RequestType { shortage, surplus, regularIndent }
+
 enum RequestStatus { draft, pending, approved, fulfilled, rejected }
 
 class MedRequest {
@@ -29,10 +30,12 @@ class MedRequest {
       id: id,
       facilityId: map['facilityId'] ?? '',
       medicineName: map['medicineName'] ?? '',
-      type: RequestType.values.firstWhere((e) => e.name == map['type'], orElse: () => RequestType.regularIndent),
+      type: RequestType.values.firstWhere((e) => e.name == map['type'],
+          orElse: () => RequestType.regularIndent),
       quantity: map['quantity']?.toInt() ?? 0,
       requestDate: (map['requestDate'] as Timestamp).toDate(),
-      status: RequestStatus.values.firstWhere((e) => e.name == map['status'], orElse: () => RequestStatus.pending),
+      status: RequestStatus.values.firstWhere((e) => e.name == map['status'],
+          orElse: () => RequestStatus.pending),
       notes: map['notes'],
     );
   }

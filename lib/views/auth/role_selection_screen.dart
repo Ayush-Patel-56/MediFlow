@@ -12,7 +12,8 @@ class RoleSelectionScreen extends StatefulWidget {
   State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
 }
 
-class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTickerProviderStateMixin {
+class _RoleSelectionScreenState extends State<RoleSelectionScreen>
+    with SingleTickerProviderStateMixin {
   bool _isHoveringFacility = false;
   bool _isHoveringAdmin = false;
   late AnimationController _pulseController;
@@ -55,7 +56,10 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                     return AnimatedBuilder(
                       animation: _pulseController,
                       builder: (context, child) {
-                        final offset = math.sin(_pulseController.value * math.pi * 2 + i * 1.2) * 20;
+                        final offset = math.sin(
+                                _pulseController.value * math.pi * 2 +
+                                    i * 1.2) *
+                            20;
                         return Positioned(
                           top: 100.0 + i * 180.0 + offset,
                           left: 50.0 + i * 80.0,
@@ -90,13 +94,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
-                                color: MediColors.primary.withValues(alpha: 0.4),
+                                color:
+                                    MediColors.primary.withValues(alpha: 0.4),
                                 blurRadius: 40,
                                 spreadRadius: 5,
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.health_and_safety_rounded, size: 52, color: Colors.white),
+                          child: const Icon(Icons.health_and_safety_rounded,
+                              size: 52, color: Colors.white),
                         ),
                         const SizedBox(height: 32),
                         ShaderMask(
@@ -129,9 +135,19 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildStat('AI-Powered', 'Forecasting'),
-                            Container(width: 1, height: 40, color: MediColors.border, margin: const EdgeInsets.symmetric(horizontal: 32)),
+                            Container(
+                                width: 1,
+                                height: 40,
+                                color: MediColors.border,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 32)),
                             _buildStat('Real-time', 'Analytics'),
-                            Container(width: 1, height: 40, color: MediColors.border, margin: const EdgeInsets.symmetric(horizontal: 32)),
+                            Container(
+                                width: 1,
+                                height: 40,
+                                color: MediColors.border,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 32)),
                             _buildStat('Smart', 'Redistribution'),
                           ],
                         ),
@@ -153,21 +169,27 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                   children: [
                     const Text(
                       'Welcome Back',
-                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: MediColors.textPrimary),
+                      style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: MediColors.textPrimary),
                     ),
                     const SizedBox(height: 8),
                     const Text(
                       'Choose your portal to continue',
-                      style: TextStyle(fontSize: 15, color: MediColors.textSecondary),
+                      style: TextStyle(
+                          fontSize: 15, color: MediColors.textSecondary),
                     ),
                     const SizedBox(height: 48),
                     _buildRoleCard(
                       title: 'Facility Head',
                       subtitle: 'Manage inventory, daily logs & AI indents',
                       icon: Icons.local_hospital_rounded,
-                      gradient: const LinearGradient(colors: [Color(0xFF059669), Color(0xFF14B8A6)]),
+                      gradient: const LinearGradient(
+                          colors: [Color(0xFF059669), Color(0xFF14B8A6)]),
                       isHovering: _isHoveringFacility,
-                      onHover: (val) => setState(() => _isHoveringFacility = val),
+                      onHover: (val) =>
+                          setState(() => _isHoveringFacility = val),
                       onTap: () => context.go('/login/facility'),
                     ),
                     const SizedBox(height: 20),
@@ -185,19 +207,28 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                       builder: (context, ref, child) {
                         return TextButton.icon(
                           onPressed: () async {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Seeding demo data...')));
-                            final error = await ref.read(firebaseServiceProvider).seedDemoData();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Seeding demo data...')));
+                            final error = await ref
+                                .read(firebaseServiceProvider)
+                                .seedDemoData();
                             if (context.mounted) {
                               if (error != null) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(error)));
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo data seeded ✓')));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text('Demo data seeded ✓')));
                               }
                             }
                           },
-                          icon: const Icon(Icons.data_saver_on_rounded, size: 16),
+                          icon:
+                              const Icon(Icons.data_saver_on_rounded, size: 16),
                           label: const Text('Seed Demo Data'),
-                          style: TextButton.styleFrom(foregroundColor: MediColors.textMuted),
+                          style: TextButton.styleFrom(
+                              foregroundColor: MediColors.textMuted),
                         );
                       },
                     ),
@@ -214,9 +245,14 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
   Widget _buildStat(String top, String bottom) {
     return Column(
       children: [
-        Text(top, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: MediColors.primary)),
+        Text(top,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: MediColors.primary)),
         const SizedBox(height: 4),
-        Text(bottom, style: const TextStyle(fontSize: 12, color: MediColors.textMuted)),
+        Text(bottom,
+            style: const TextStyle(fontSize: 12, color: MediColors.textMuted)),
       ],
     );
   }
@@ -241,16 +277,24 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
           curve: Curves.easeOutCubic,
           width: 420,
           padding: const EdgeInsets.all(24),
-          transform: Matrix4.identity()..translate(0.0, isHovering ? -4.0 : 0.0),
+          transform: Matrix4.identity()
+            ..translate(0.0, isHovering ? -4.0 : 0.0),
           decoration: BoxDecoration(
             color: MediColors.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isHovering ? gradient.colors.first.withValues(alpha: 0.5) : MediColors.border,
+              color: isHovering
+                  ? gradient.colors.first.withValues(alpha: 0.5)
+                  : MediColors.border,
               width: 1.5,
             ),
             boxShadow: isHovering
-                ? [BoxShadow(color: gradient.colors.first.withValues(alpha: 0.15), blurRadius: 30, offset: const Offset(0, 12))]
+                ? [
+                    BoxShadow(
+                        color: gradient.colors.first.withValues(alpha: 0.15),
+                        blurRadius: 30,
+                        offset: const Offset(0, 12))
+                  ]
                 : [],
           ),
           child: Row(
@@ -268,16 +312,23 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with SingleTi
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: MediColors.textPrimary)),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(fontSize: 13, color: MediColors.textSecondary)),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            fontSize: 13, color: MediColors.textSecondary)),
                   ],
                 ),
               ),
               Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 16,
-                color: isHovering ? gradient.colors.first : MediColors.textMuted,
+                color:
+                    isHovering ? gradient.colors.first : MediColors.textMuted,
               ),
             ],
           ),

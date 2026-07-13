@@ -83,7 +83,9 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
             query: text,
             context: _activeContext,
             role: widget.role,
-            history: _messages.length > 10 ? _messages.sublist(_messages.length - 10) : _messages,
+            history: _messages.length > 10
+                ? _messages.sublist(_messages.length - 10)
+                : _messages,
           );
       if (mounted) {
         setState(() {
@@ -95,7 +97,10 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _messages.add({'role': 'ai', 'content': 'I encountered an error accessing the system: $e'});
+          _messages.add({
+            'role': 'ai',
+            'content': 'I encountered an error accessing the system: $e'
+          });
           _isTyping = false;
         });
         _scrollToBottom();
@@ -112,14 +117,21 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 18),
+              decoration: BoxDecoration(
+                  gradient: MediColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.smart_toy_rounded,
+                  color: Colors.white, size: 18),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('MediFlow AI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+                const Text('MediFlow AI',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: MediColors.textPrimary)),
                 const Text(
                   'gemini-flash-lite-latest',
                   style: TextStyle(fontSize: 11, color: MediColors.textMuted),
@@ -139,7 +151,8 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
                     padding: const EdgeInsets.all(24),
                     itemCount: _messages.length + (_isTyping ? 1 : 0),
                     itemBuilder: (context, index) {
-                      if (index == _messages.length && _isTyping) return _buildTypingIndicator();
+                      if (index == _messages.length && _isTyping)
+                        return _buildTypingIndicator();
                       final msg = _messages[index];
                       return _buildBubble(msg['role']!, msg['content']!);
                     },
@@ -163,18 +176,24 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
                       hintText: 'Ask about inventory, forecasts, alerts...',
                       filled: true,
                       fillColor: MediColors.surfaceLight,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  decoration: BoxDecoration(gradient: MediColors.primaryGradient, borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(
+                      gradient: MediColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(14)),
                   child: IconButton(
                     onPressed: _isTyping ? null : _sendMessage,
-                    icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                    icon: const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 20),
                   ),
                 ),
               ],
@@ -196,12 +215,18 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
               color: MediColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(24),
             ),
-            child: Icon(Icons.smart_toy_rounded, size: 52, color: MediColors.primary),
+            child: Icon(Icons.smart_toy_rounded,
+                size: 52, color: MediColors.primary),
           ),
           const SizedBox(height: 24),
-          Text('MediFlow AI Assistant', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: MediColors.textPrimary)),
+          Text('MediFlow AI Assistant',
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: MediColors.textPrimary)),
           const SizedBox(height: 8),
-          Text('Ask about inventory, forecasts, or supply chain insights', style: TextStyle(color: MediColors.textSecondary)),
+          Text('Ask about inventory, forecasts, or supply chain insights',
+              style: TextStyle(color: MediColors.textSecondary)),
           const SizedBox(height: 32),
           Wrap(
             spacing: 12,
@@ -241,15 +266,18 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
         decoration: BoxDecoration(
           gradient: isUser ? MediColors.primaryGradient : null,
           color: isUser ? null : MediColors.surface,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
-            bottomLeft: isUser ? const Radius.circular(18) : const Radius.circular(4),
-            bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(18),
+            bottomLeft:
+                isUser ? const Radius.circular(18) : const Radius.circular(4),
+            bottomRight:
+                isUser ? const Radius.circular(4) : const Radius.circular(18),
           ),
           border: isUser ? null : Border.all(color: MediColors.border),
         ),
@@ -274,16 +302,21 @@ class _AIChatPageState extends ConsumerState<AIChatPage> {
         decoration: BoxDecoration(
           color: MediColors.surface,
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(18), topRight: Radius.circular(18), bottomRight: Radius.circular(18), bottomLeft: Radius.circular(4),
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomRight: Radius.circular(18),
+            bottomLeft: Radius.circular(4),
           ),
           border: Border.all(color: MediColors.border),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: List.generate(3, (i) => Padding(
-            padding: EdgeInsets.only(right: i < 2 ? 6 : 0),
-            child: _BouncingDot(delay: i * 150),
-          )),
+          children: List.generate(
+              3,
+              (i) => Padding(
+                    padding: EdgeInsets.only(right: i < 2 ? 6 : 0),
+                    child: _BouncingDot(delay: i * 150),
+                  )),
         ),
       ),
     );
@@ -298,22 +331,28 @@ class _BouncingDot extends StatefulWidget {
   State<_BouncingDot> createState() => _BouncingDotState();
 }
 
-class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderStateMixin {
+class _BouncingDotState extends State<_BouncingDot>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
-    _animation = Tween(begin: 0.0, end: -6.0).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _controller = AnimationController(
+        duration: const Duration(milliseconds: 600), vsync: this);
+    _animation = Tween(begin: 0.0, end: -6.0)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     Future.delayed(Duration(milliseconds: widget.delay), () {
       if (mounted) _controller.repeat(reverse: true);
     });
   }
 
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +360,11 @@ class _BouncingDotState extends State<_BouncingDot> with SingleTickerProviderSta
       animation: _animation,
       builder: (context, child) => Transform.translate(
         offset: Offset(0, _animation.value),
-        child: Container(width: 8, height: 8, decoration: BoxDecoration(color: MediColors.primary, shape: BoxShape.circle)),
+        child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+                color: MediColors.primary, shape: BoxShape.circle)),
       ),
     );
   }

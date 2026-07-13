@@ -58,7 +58,8 @@ class ChatService {
     _facilityId = facilityId;
     try {
       if (facilityId != null) {
-        final facilityDoc = await _firestore.collection('facilities').doc(facilityId).get();
+        final facilityDoc =
+            await _firestore.collection('facilities').doc(facilityId).get();
         if (facilityDoc.exists) {
           _facilityData = facilityDoc.data();
         }
@@ -79,7 +80,8 @@ class ChatService {
             .get();
         _usageLogs = logsSnapshot.docs.map((doc) => doc.data()).toList();
       } else {
-        final facilitiesSnapshot = await _firestore.collection('facilities').get();
+        final facilitiesSnapshot =
+            await _firestore.collection('facilities').get();
         _allFacilities = facilitiesSnapshot.docs.map((doc) {
           final data = doc.data();
           data['id'] = doc.id;
@@ -143,7 +145,8 @@ Location: (${data['latitude']}, ${data['longitude']})
             final pct = ((remaining / initial) * 100).round();
             final expiry = (d['expiryDate'] as Timestamp).toDate();
             final daysToExpiry = expiry.difference(DateTime.now()).inDays;
-            context += '- ${d['medicineName']}: $remaining/$initial units ($pct%) | Expires in $daysToExpiry days | Batch: ${d['batchId']}\n';
+            context +=
+                '- ${d['medicineName']}: $remaining/$initial units ($pct%) | Expires in $daysToExpiry days | Batch: ${d['batchId']}\n';
           }
           context += '\n';
         }
@@ -155,8 +158,11 @@ Location: (${data['latitude']}, ${data['longitude']})
             final dateStr = '${date.day}/${date.month}/${date.year}';
             final patients = d['totalPatients'] ?? 0;
             final meds = (d['medicines'] as List<dynamic>?) ?? [];
-            final medSummary = meds.map((m) => '${m['medicineName']}:${m['unitsDistributed']}').join(', ');
-            context += '- $dateStr | Patients: $patients | Usage: $medSummary\n';
+            final medSummary = meds
+                .map((m) => '${m['medicineName']}:${m['unitsDistributed']}')
+                .join(', ');
+            context +=
+                '- $dateStr | Patients: $patients | Usage: $medSummary\n';
           }
           context += '\n';
         }
@@ -164,7 +170,8 @@ Location: (${data['latitude']}, ${data['longitude']})
         if (_allFacilities.isNotEmpty) {
           context += '=== ALL FACILITIES ===\n';
           for (var d in _allFacilities) {
-            context += '- ${d['name']} (${d['type']}) | Region: ${d['region']} | ID: ${d['id']}\n';
+            context +=
+                '- ${d['name']} (${d['type']}) | Region: ${d['region']} | ID: ${d['id']}\n';
           }
           context += '\n';
         }
@@ -181,7 +188,8 @@ Location: (${data['latitude']}, ${data['longitude']})
               final remaining = d['remainingQuantity'] ?? 0;
               final initial = d['initialQuantity'] ?? 1;
               final pct = ((remaining / initial) * 100).round();
-              context += '- ${d['medicineName']}: $remaining/$initial ($pct%)\n';
+              context +=
+                  '- ${d['medicineName']}: $remaining/$initial ($pct%)\n';
             }
             context += '\n';
           }
@@ -191,7 +199,8 @@ Location: (${data['latitude']}, ${data['longitude']})
       if (_requests.isNotEmpty) {
         context += '=== PENDING REQUESTS ===\n';
         for (var d in _requests) {
-          context += '- ${d['medicineName']}: ${d['quantity']} units | Status: ${d['status']} | Priority: ${d['priority']}\n';
+          context +=
+              '- ${d['medicineName']}: ${d['quantity']} units | Status: ${d['status']} | Priority: ${d['priority']}\n';
         }
         context += '\n';
       }
@@ -215,7 +224,10 @@ Location: (${data['latitude']}, ${data['longitude']})
 
     final history = [
       Content.text(systemContext),
-      Content.model([TextPart('Understood! I have access to the facility data. How can I help you today? 🏥')]),
+      Content.model([
+        TextPart(
+            'Understood! I have access to the facility data. How can I help you today? 🏥')
+      ]),
     ];
 
     _chat = _model!.startChat(history: history);
@@ -223,7 +235,10 @@ Location: (${data['latitude']}, ${data['longitude']})
     if (_fallbackModel != null) {
       _fallbackChat = _fallbackModel!.startChat(history: [
         Content.text(systemContext),
-        Content.model([TextPart('Understood! I have access to the facility data. How can I help you today? 🏥')]),
+        Content.model([
+          TextPart(
+              'Understood! I have access to the facility data. How can I help you today? 🏥')
+        ]),
       ]);
     }
   }
@@ -251,11 +266,13 @@ Location: (${data['latitude']}, ${data['longitude']})
     if (!_usingFallback) {
       try {
         final response = await _chat!.sendMessage(Content.text(message));
-        return response.text ?? 'I couldn\'t generate a response. Please try again.';
+        return response.text ??
+            'I couldn\'t generate a response. Please try again.';
       } catch (e) {
         final errorStr = e.toString();
         if (_isQuotaError(errorStr)) {
-          print('ChatService: $_primaryModelName quota exceeded, trying $_fallbackModelName...');
+          print(
+              'ChatService: $_primaryModelName quota exceeded, trying $_fallbackModelName...');
           _usingFallback = true;
         } else {
           return _generateOfflineResponse(message);
@@ -266,12 +283,15 @@ Location: (${data['latitude']}, ${data['longitude']})
     // Try fallback model
     if (_usingFallback && _fallbackChat != null) {
       try {
-        final response = await _fallbackChat!.sendMessage(Content.text(message));
-        return response.text ?? 'I couldn\'t generate a response. Please try again.';
+        final response =
+            await _fallbackChat!.sendMessage(Content.text(message));
+        return response.text ??
+            'I couldn\'t generate a response. Please try again.';
       } catch (e) {
         final errorStr = e.toString();
         if (_isQuotaError(errorStr)) {
-          print('ChatService: Both models exhausted, switching to offline mode.');
+          print(
+              'ChatService: Both models exhausted, switching to offline mode.');
           _offlineMode = true;
           return _generateOfflineResponse(message);
         }
@@ -291,31 +311,51 @@ Location: (${data['latitude']}, ${data['longitude']})
     if (_matchesAny(query, ['hi', 'hello', 'hey', 'help', 'what can you do'])) {
       return _greetingResponse();
     }
-    if (_matchesAny(query, ['inventory', 'stock', 'summary', 'medicine', 'medicines', 'show inventory'])) {
+    if (_matchesAny(query, [
+      'inventory',
+      'stock',
+      'summary',
+      'medicine',
+      'medicines',
+      'show inventory'
+    ])) {
       return _inventorySummary();
     }
-    if (_matchesAny(query, ['low stock', 'alert', 'alerts', 'critical', 'shortage', 'warning'])) {
+    if (_matchesAny(query,
+        ['low stock', 'alert', 'alerts', 'critical', 'shortage', 'warning'])) {
       return _lowStockAlerts();
     }
-    if (_matchesAny(query, ['usage', 'trend', 'trends', 'used most', 'consumption', 'usage trend'])) {
+    if (_matchesAny(query, [
+      'usage',
+      'trend',
+      'trends',
+      'used most',
+      'consumption',
+      'usage trend'
+    ])) {
       return _usageTrends();
     }
-    if (_matchesAny(query, ['request', 'requests', 'pending', 'indent', 'supply request'])) {
+    if (_matchesAny(query,
+        ['request', 'requests', 'pending', 'indent', 'supply request'])) {
       return _requestsSummary();
     }
-    if (_matchesAny(query, ['expir', 'expiry', 'expire', 'expired', 'shelf life'])) {
+    if (_matchesAny(
+        query, ['expir', 'expiry', 'expire', 'expired', 'shelf life'])) {
       return _expiryReport();
     }
-    if (_matchesAny(query, ['forecast', 'predict', 'demand', 'next month', 'projection'])) {
+    if (_matchesAny(
+        query, ['forecast', 'predict', 'demand', 'next month', 'projection'])) {
       return _demandForecast();
     }
-    if (_matchesAny(query, ['facility', 'facilities', 'clinic', 'hospital', 'center'])) {
+    if (_matchesAny(
+        query, ['facility', 'facilities', 'clinic', 'hospital', 'center'])) {
       return _facilityInfo();
     }
     if (_matchesAny(query, ['top', 'most used', 'highest', 'popular'])) {
       return _topMedicines();
     }
-    if (_matchesAny(query, ['redistribute', 'redistribution', 'transfer', 'rebalance'])) {
+    if (_matchesAny(
+        query, ['redistribute', 'redistribution', 'transfer', 'rebalance'])) {
       return _redistributionAdvice();
     }
 
@@ -349,17 +389,23 @@ Location: (${data['latitude']}, ${data['longitude']})
       final remaining = (d['remainingQuantity'] ?? 0) as num;
       final initial = (d['initialQuantity'] ?? 1) as num;
       final pct = initial > 0 ? ((remaining / initial) * 100).round() : 0;
-      final facilityLabel = d['facilityName'] != null ? ' _(${d['facilityName']})_' : '';
+      final facilityLabel =
+          d['facilityName'] != null ? ' _(${d['facilityName']})_' : '';
       final status = pct <= 15 ? '🔴' : (pct <= 40 ? '🟡' : '🟢');
 
-      if (pct <= 15) critical++;
-      else if (pct <= 40) warning++;
-      else healthy++;
+      if (pct <= 15)
+        critical++;
+      else if (pct <= 40)
+        warning++;
+      else
+        healthy++;
 
-      response += '$status **${d['medicineName']}**$facilityLabel: $remaining/$initial units ($pct%)\n';
+      response +=
+          '$status **${d['medicineName']}**$facilityLabel: $remaining/$initial units ($pct%)\n';
     }
 
-    response += '\n📊 Overall: **$critical** critical · **$warning** warning · **$healthy** healthy';
+    response +=
+        '\n📊 Overall: **$critical** critical · **$warning** warning · **$healthy** healthy';
     return response;
   }
 
@@ -387,7 +433,8 @@ Location: (${data['latitude']}, ${data['longitude']})
     String response = '⚠️ **Low Stock Alerts** (${lowStock.length} items)\n\n';
     for (var d in lowStock) {
       final status = (d['pct'] as int) <= 15 ? '🔴 CRITICAL' : '🟡 WARNING';
-      final facilityLabel = d['facilityName'] != null ? ' at ${d['facilityName']}' : '';
+      final facilityLabel =
+          d['facilityName'] != null ? ' at ${d['facilityName']}' : '';
       response += '$status — **${d['medicineName']}**$facilityLabel\n'
           '   ${d['remainingQuantity']}/${d['initialQuantity']} units (${d['pct']}% remaining)\n\n';
     }
@@ -401,7 +448,8 @@ Location: (${data['latitude']}, ${data['longitude']})
       return '📈 No usage data available yet. Log daily usage to see trends.';
     }
 
-    String response = '📈 **Usage Trends (Last ${_usageLogs.length} days)**\n\n';
+    String response =
+        '📈 **Usage Trends (Last ${_usageLogs.length} days)**\n\n';
     int totalPatients = 0;
     Map<String, int> medUsage = {};
 
@@ -426,8 +474,10 @@ Location: (${data['latitude']}, ${data['longitude']})
     response += '\n👥 Avg patients/day: **$avgPatients**\n';
 
     if (medUsage.isNotEmpty) {
-      final sorted = medUsage.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-      response += '💊 Top medicine: **${sorted.first.key}** (${sorted.first.value} total units)\n';
+      final sorted = medUsage.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      response +=
+          '💊 Top medicine: **${sorted.first.key}** (${sorted.first.value} total units)\n';
     }
 
     return response;
@@ -470,14 +520,18 @@ Location: (${data['latitude']}, ${data['longitude']})
       return '✅ No medicines expiring within 90 days. All good! 🎉';
     }
 
-    expiring.sort((a, b) => (a['daysLeft'] as int).compareTo(b['daysLeft'] as int));
+    expiring
+        .sort((a, b) => (a['daysLeft'] as int).compareTo(b['daysLeft'] as int));
 
-    String response = '📅 **Expiry Report** (${expiring.length} items within 90 days)\n\n';
+    String response =
+        '📅 **Expiry Report** (${expiring.length} items within 90 days)\n\n';
     for (var d in expiring) {
       final days = d['daysLeft'] as int;
       final icon = days <= 30 ? '🔴' : (days <= 60 ? '🟡' : '🟠');
-      final facilityLabel = d['facilityName'] != null ? ' at ${d['facilityName']}' : '';
-      response += '$icon **${d['medicineName']}**$facilityLabel — **$days days** left\n'
+      final facilityLabel =
+          d['facilityName'] != null ? ' at ${d['facilityName']}' : '';
+      response +=
+          '$icon **${d['medicineName']}**$facilityLabel — **$days days** left\n'
           '   Remaining: ${d['remainingQuantity']} units | Batch: ${d['batchId'] ?? 'N/A'}\n\n';
     }
     return response;
@@ -507,20 +561,26 @@ Location: (${data['latitude']}, ${data['longitude']})
         final initial = (d['initialQuantity'] ?? 1) as num;
         final used = initial - remaining;
         final forecast = (used * 1.1).round();
-        response += '💊 **${d['medicineName']}**: ~$forecast units/month (estimated)\n';
+        response +=
+            '💊 **${d['medicineName']}**: ~$forecast units/month (estimated)\n';
       }
     } else {
       for (var entry in medHistory.entries) {
-        final avg = entry.value.fold(0, (sum, v) => sum + v) / entry.value.length;
+        final avg =
+            entry.value.fold(0, (sum, v) => sum + v) / entry.value.length;
         final forecast30 = (avg * 30 * 1.1).round(); // 10% buffer
         final trend = entry.value.length >= 3
-            ? (entry.value.last > entry.value.first ? '📈 Increasing' : '📉 Decreasing')
+            ? (entry.value.last > entry.value.first
+                ? '📈 Increasing'
+                : '📉 Decreasing')
             : '➡️ Stable';
-        response += '💊 **${entry.key}**: ~**$forecast30** units/30 days | $trend\n';
+        response +=
+            '💊 **${entry.key}**: ~**$forecast30** units/30 days | $trend\n';
       }
     }
 
-    response += '\n_Forecasts include a 10% safety buffer. Based on ${_usageLogs.length} days of data._';
+    response +=
+        '\n_Forecasts include a 10% safety buffer. Based on ${_usageLogs.length} days of data._';
     return response;
   }
 
@@ -565,12 +625,14 @@ Location: (${data['latitude']}, ${data['longitude']})
       return '💊 No usage data yet. Log daily consumption to see top medicines.';
     }
 
-    final sorted = medUsage.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final sorted = medUsage.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     String response = '💊 **Most Used Medicines**\n\n';
     for (int i = 0; i < sorted.length && i < 5; i++) {
       final medal = i == 0 ? '🥇' : (i == 1 ? '🥈' : (i == 2 ? '🥉' : '▪️'));
-      response += '$medal **${sorted[i].key}**: ${sorted[i].value} units distributed\n';
+      response +=
+          '$medal **${sorted[i].key}**: ${sorted[i].value} units distributed\n';
     }
     return response;
   }
@@ -600,18 +662,21 @@ Location: (${data['latitude']}, ${data['longitude']})
     response += '**Facilities needing supply:**\n';
     for (var d in deficit) {
       final facilityLabel = d['facilityName'] ?? '';
-      response += '🔴 ${d['medicineName']} $facilityLabel — ${d['pct']}% remaining\n';
+      response +=
+          '🔴 ${d['medicineName']} $facilityLabel — ${d['pct']}% remaining\n';
     }
 
     if (surplus.isNotEmpty) {
       response += '\n**Potential donors:**\n';
       for (var d in surplus) {
         final facilityLabel = d['facilityName'] ?? '';
-        response += '🟢 ${d['medicineName']} $facilityLabel — ${d['pct']}% remaining (surplus)\n';
+        response +=
+            '🟢 ${d['medicineName']} $facilityLabel — ${d['pct']}% remaining (surplus)\n';
       }
     }
 
-    response += '\n💡 _Use AI Stock Analysis to prepare restock or redistribution requests._';
+    response +=
+        '\n💡 _Use AI Stock Analysis to prepare restock or redistribution requests._';
     return response;
   }
 

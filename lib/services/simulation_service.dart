@@ -1,11 +1,10 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/facility.dart';
-import '../models/inventory_item.dart';
 import '../models/daily_usage_log.dart';
 
-final simulationServiceProvider = Provider((ref) => SimulationService(FirebaseFirestore.instance));
+final simulationServiceProvider =
+    Provider((ref) => SimulationService(FirebaseFirestore.instance));
 
 class SimulationService {
   final FirebaseFirestore _firestore;
@@ -19,14 +18,21 @@ class SimulationService {
     // Center point: Delhi NCR (28.6139, 77.2090)
     final double centerLat = 28.61;
     final double centerLng = 77.20;
-    
+
     // Add small random offset to cluster them (within ~50km)
     final double latOffset = (_random.nextDouble() - 0.5) * 0.4;
     final double lngOffset = (_random.nextDouble() - 0.5) * 0.4;
-    
-    final String assignedType = type ?? (_random.nextBool() ? 'urban' : 'rural');
-    
-    final List<String> regions = ['North District', 'South District', 'East State', 'West Sector', 'Central Zone'];
+
+    final String assignedType =
+        type ?? (_random.nextBool() ? 'urban' : 'rural');
+
+    final List<String> regions = [
+      'North District',
+      'South District',
+      'East State',
+      'West Sector',
+      'Central Zone'
+    ];
     final String region = regions[_random.nextInt(regions.length)];
 
     return {
@@ -61,7 +67,7 @@ class SimulationService {
         writeCount = 0;
       }
     }
-    
+
     if (writeCount > 0) {
       await batch.commit();
     }
@@ -85,7 +91,7 @@ class SimulationService {
       final data = doc.data();
       final int initial = data['initialQuantity'] ?? 2000;
       final String medName = data['medicineName'] ?? '';
-      
+
       int remaining;
       int? daysToExpiryOverride;
       if (facilityId == 'rampur_mediflow_com') {
@@ -124,7 +130,8 @@ class SimulationService {
         'lastUpdated': Timestamp.now(),
       };
       if (daysToExpiryOverride != null) {
-        updates['expiryDate'] = Timestamp.fromDate(DateTime.now().add(Duration(days: daysToExpiryOverride)));
+        updates['expiryDate'] = Timestamp.fromDate(
+            DateTime.now().add(Duration(days: daysToExpiryOverride)));
       }
 
       await doc.reference.update(updates);
@@ -142,7 +149,7 @@ class SimulationService {
       'Iron Folic Acid': 'tablets',
       'Amoxicillin 250mg': 'capsules'
     };
-    
+
     for (var entry in medicines.entries) {
       final med = entry.key;
       final unit = entry.value;
@@ -156,32 +163,41 @@ class SimulationService {
       final snapshot = await invRef.get();
       if (!snapshot.exists) {
         final int initialQty = 2000 + _random.nextInt(3000);
-        
+
         int daysToExpiry;
         if (facilityId == 'rampur_mediflow_com') {
-          if (med == 'Paracetamol') daysToExpiry = -5; // Expired
-          else if (med == 'Cough Syrup') daysToExpiry = 10; // Expiring soon
-          else if (med == 'ORS') daysToExpiry = 7; // Expiring soon (wastage risk)
-          else daysToExpiry = 180 + _random.nextInt(200); // Normal
+          if (med == 'Paracetamol')
+            daysToExpiry = -5; // Expired
+          else if (med == 'Cough Syrup')
+            daysToExpiry = 10; // Expiring soon
+          else if (med == 'ORS')
+            daysToExpiry = 7; // Expiring soon (wastage risk)
+          else
+            daysToExpiry = 180 + _random.nextInt(200); // Normal
         } else {
-          daysToExpiry = _random.nextInt(10) < 2 ? 15 + _random.nextInt(60) : 180 + _random.nextInt(200);
+          daysToExpiry = _random.nextInt(10) < 2
+              ? 15 + _random.nextInt(60)
+              : 180 + _random.nextInt(200);
         }
-        
+
         await invRef.set({
           'medicineName': med,
           'batchId': 'B-${1000 + _random.nextInt(9000)}',
           'initialQuantity': initialQty,
           'remainingQuantity': initialQty,
           'unit': unit,
-          'arrivalDate': Timestamp.fromDate(DateTime.now().subtract(Duration(days: 90 + _random.nextInt(100)))),
-          'expiryDate': Timestamp.fromDate(DateTime.now().add(Duration(days: daysToExpiry))),
+          'arrivalDate': Timestamp.fromDate(DateTime.now()
+              .subtract(Duration(days: 90 + _random.nextInt(100)))),
+          'expiryDate': Timestamp.fromDate(
+              DateTime.now().add(Duration(days: daysToExpiry))),
           'lastUpdated': Timestamp.now(),
         });
       }
     }
   }
 
-  void _addSimulateDayToBatch(WriteBatch batch, String facilityId, String facilityType, DateTime date) {
+  void _addSimulateDayToBatch(
+      WriteBatch batch, String facilityId, String facilityType, DateTime date) {
     // 1. Determine patient count
     int basePatients = facilityType == 'urban' ? 150 : 35;
     double variation = 0.8 + (_random.nextDouble() * 0.4); // 80% to 120%
@@ -189,28 +205,39 @@ class SimulationService {
 
     // 2. Generate medicine usage for ALL medicines
     final List<String> medicines = [
-      'Paracetamol', 'Cough Syrup', 'ORS', 'Antibiotic', 
-      'Vitamin Tablets', 'Metformin 500mg', 'Iron Folic Acid', 'Amoxicillin 250mg'
+      'Paracetamol',
+      'Cough Syrup',
+      'ORS',
+      'Antibiotic',
+      'Vitamin Tablets',
+      'Metformin 500mg',
+      'Iron Folic Acid',
+      'Amoxicillin 250mg'
     ];
     List<MedicineUsage> usages = [];
     final month = date.month;
 
     for (var med in medicines) {
-      double usagePerPatient = 0.4 + (_random.nextDouble() * 0.3); // more realistic base
+      double usagePerPatient =
+          0.4 + (_random.nextDouble() * 0.3); // more realistic base
 
       // Seasonal Influences
-      if ((month >= 11 || month <= 2) && (med == 'Cough Syrup' || med == 'Paracetamol')) {
+      if ((month >= 11 || month <= 2) &&
+          (med == 'Cough Syrup' || med == 'Paracetamol')) {
         usagePerPatient *= 2.5; // Winter spike
       } else if ((month >= 5 && month <= 8) && med == 'ORS') {
         usagePerPatient *= 3.0; // Summer spike
       }
 
-      int unitsUsed = (totalPatients * usagePerPatient * (0.8 + _random.nextDouble() * 0.4)).round();
+      int unitsUsed =
+          (totalPatients * usagePerPatient * (0.8 + _random.nextDouble() * 0.4))
+              .round();
       usages.add(MedicineUsage(medicineName: med, unitsDistributed: unitsUsed));
     }
 
     // 3. Write Daily Log to Batch
-    final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    final dateStr =
+        "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
     final logRef = _firestore
         .collection('daily_usage_logs')
         .doc(facilityId)

@@ -37,7 +37,7 @@ Business Logic:
 
   AIService(this.ref) {
     final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-    
+
     final toolCheckSystemInventory = FunctionDeclaration(
       'check_system_inventory',
       'Checks the global inventory levels of all facilities.',
@@ -51,7 +51,11 @@ Business Logic:
         'facilityId': Schema(SchemaType.string),
         'medicineName': Schema(SchemaType.string),
         'quantity': Schema(SchemaType.integer),
-      }, requiredProperties: ['facilityId', 'medicineName', 'quantity']),
+      }, requiredProperties: [
+        'facilityId',
+        'medicineName',
+        'quantity'
+      ]),
     );
 
     final toolReportSurplus = FunctionDeclaration(
@@ -61,17 +65,23 @@ Business Logic:
         'facilityId': Schema(SchemaType.string),
         'medicineName': Schema(SchemaType.string),
         'quantity': Schema(SchemaType.integer),
-      }, requiredProperties: ['facilityId', 'medicineName', 'quantity']),
+      }, requiredProperties: [
+        'facilityId',
+        'medicineName',
+        'quantity'
+      ]),
     );
 
     _model = GenerativeModel(
       model: 'gemini-flash-lite-latest',
       apiKey: apiKey,
-      tools: [Tool(functionDeclarations: [
-        toolCheckSystemInventory,
-        toolReportShortage,
-        toolReportSurplus,
-      ])],
+      tools: [
+        Tool(functionDeclarations: [
+          toolCheckSystemInventory,
+          toolReportShortage,
+          toolReportSurplus,
+        ])
+      ],
     );
   }
 
@@ -86,7 +96,9 @@ Business Logic:
   }
 
   void _handleQuotaError(String errorMsg) {
-    if (errorMsg.contains('quota') || errorMsg.contains('Quota') || errorMsg.contains('limit')) {
+    if (errorMsg.contains('quota') ||
+        errorMsg.contains('Quota') ||
+        errorMsg.contains('limit')) {
       _quotaExhausted = true;
       _quotaResetTime = DateTime.now().add(const Duration(minutes: 1));
       print('AI Service: Quota hit. Mode switched to local assistance.');
@@ -94,9 +106,14 @@ Business Logic:
   }
 
   // ─── FORECASTING ───────────────────────────────────────────────
-  Future<Map<String, dynamic>> forecastDemand(String medicineName, List<DailyUsageLog> logs, int daysToForecast, {String? facilityId}) async {
+  Future<Map<String, dynamic>> forecastDemand(
+      String medicineName, List<DailyUsageLog> logs, int daysToForecast,
+      {String? facilityId}) async {
     final medLogs = logs.map((l) {
-      final usage = l.medicines.firstWhere((m) => m.medicineName == medicineName, orElse: () => MedicineUsage(medicineName: medicineName, unitsDistributed: 0));
+      final usage = l.medicines.firstWhere(
+          (m) => m.medicineName == medicineName,
+          orElse: () =>
+              MedicineUsage(medicineName: medicineName, unitsDistributed: 0));
       return {'date': l.date, 'used': usage.unitsDistributed};
     }).toList();
 
@@ -114,12 +131,18 @@ Business Logic:
     }
 
     try {
-      final logSummary = medLogs.take(30).map((l) => 'Date: ${(l['date'] as DateTime).toIso8601String()}, Used: ${l['used']}').join('\n');
-      final prompt = 'Forecast $daysToForecast days for $medicineName. History:\n$logSummary\nOutput JSON: {"prediction": int, "reasoning": "string"}';
+      final logSummary = medLogs
+          .take(30)
+          .map((l) =>
+              'Date: ${(l['date'] as DateTime).toIso8601String()}, Used: ${l['used']}')
+          .join('\n');
+      final prompt =
+          'Forecast $daysToForecast days for $medicineName. History:\n$logSummary\nOutput JSON: {"prediction": int, "reasoning": "string"}';
 
       final response = await _model.generateContent([Content.text(prompt)]);
       final raw = response.text ?? '{}';
-      var decoded = jsonDecode(raw.replaceAll('```json', '').replaceAll('```', '').trim());
+      var decoded = jsonDecode(
+          raw.replaceAll('```json', '').replaceAll('```', '').trim());
       if (decoded is Map) {
         final result = Map<String, dynamic>.from(decoded);
         await _logAIDecision(
@@ -184,19 +207,29 @@ Business Logic:
     }
   }
 
-  Map<String, dynamic> _localForecast(List<Map<String, dynamic>> medLogs, int daysToForecast, String medicineName) {
-    double avg = medLogs.isEmpty ? 10.0 : medLogs.map((l) => (l['used'] as int).toDouble()).fold(0.0, (a, b) => a + b) / medLogs.length;
+  Map<String, dynamic> _localForecast(List<Map<String, dynamic>> medLogs,
+      int daysToForecast, String medicineName) {
+    double avg = medLogs.isEmpty
+        ? 10.0
+        : medLogs
+                .map((l) => (l['used'] as int).toDouble())
+                .fold(0.0, (a, b) => a + b) /
+            medLogs.length;
     int prediction = (avg * daysToForecast * 1.1).round();
 
     String reason = "Standard historical average computation with 10% buffer.";
     if (medicineName == "Cough Syrup") {
-      reason = "Seasonal logic: High respiratory demand expected in winters, stabilizing towards spring. Applied rural demographic factor.";
+      reason =
+          "Seasonal logic: High respiratory demand expected in winters, stabilizing towards spring. Applied rural demographic factor.";
     } else if (medicineName == "ORS") {
-      reason = "Seasonal logic: Elevated demand due to approaching summer heat in rural catchment areas.";
+      reason =
+          "Seasonal logic: Elevated demand due to approaching summer heat in rural catchment areas.";
     } else if (medicineName == "Antibiotic") {
-      reason = "Consistent high burn rate detected. Ensuring sufficient stock to prevent critical rural shortages.";
+      reason =
+          "Consistent high burn rate detected. Ensuring sufficient stock to prevent critical rural shortages.";
     } else if (medicineName == "Paracetamol") {
-      reason = "Baseline essential. Prediction factors in historical burn rate + 10% surge buffer for seasonal flu.";
+      reason =
+          "Baseline essential. Prediction factors in historical burn rate + 10% surge buffer for seasonal flu.";
     }
 
     return {"prediction": prediction, "reasoning": reason};
@@ -217,10 +250,11 @@ Business Logic:
         return val.toString();
       });
 
-      final chat = _model.startChat(history: history.map((m) => Content(
-        m['role'] == 'user' ? 'user' : 'model',
-        [TextPart(m['content']!)]
-      )).toList());
+      final chat = _model.startChat(
+          history: history
+              .map((m) => Content(m['role'] == 'user' ? 'user' : 'model',
+                  [TextPart(m['content']!)]))
+              .toList());
 
       final prompt = '''
 Role: $role
@@ -236,7 +270,8 @@ Answer naturally using the blueprint and data.
         final toolDispatcher = ref.read(toolDispatcherProvider);
         for (final call in response.functionCalls) {
           final result = await toolDispatcher.dispatch(call);
-          response = await chat.sendMessage(Content.functionResponse(call.name, result));
+          response = await chat
+              .sendMessage(Content.functionResponse(call.name, result));
         }
       }
 
@@ -248,41 +283,52 @@ Answer naturally using the blueprint and data.
     }
   }
 
-  String _localSystemResponse(String query, Map<String, dynamic> context, String role) {
+  String _localSystemResponse(
+      String query, Map<String, dynamic> context, String role) {
     final inventory = (context['current_inventory'] as List? ?? []);
     final logs = (context['historical_data'] as List? ?? []);
-    
-    final intro = "⚡ [MediFlow Engine]: Gemini is currently optimizing and I'm taking over with local system intelligence.\n\n";
+
+    final intro =
+        "⚡ [MediFlow Engine]: Gemini is currently optimizing and I'm taking over with local system intelligence.\n\n";
     final buffer = StringBuffer(intro);
 
-    if (query.toLowerCase().contains("stock") || query.toLowerCase().contains("inventory")) {
+    if (query.toLowerCase().contains("stock") ||
+        query.toLowerCase().contains("inventory")) {
       buffer.writeln("### 📦 System Stock Analysis");
       for (var item in inventory) {
         final rem = item['remainingQuantity'] ?? 0;
         final tot = item['initialQuantity'] ?? 0;
         final name = item['medicineName'] ?? 'Unknown';
-        final status = (tot > 0 && rem / tot < 0.2) ? "⚠️ CRITICAL" : "✅ STABLE";
+        final status =
+            (tot > 0 && rem / tot < 0.2) ? "⚠️ CRITICAL" : "✅ STABLE";
         buffer.writeln("• **$name**: $rem/$tot units ($status)");
       }
     } else {
-      buffer.writeln("I am the MediFlow Local Intelligence Engine. Ask me about your stock or usage trends.");
+      buffer.writeln(
+          "I am the MediFlow Local Intelligence Engine. Ask me about your stock or usage trends.");
     }
 
     return buffer.toString();
   }
 
   // ─── SMART ALERTS ──────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> generateSmartAlerts(List<InventoryItem> inventory) async {
-    final local = inventory.where((i) => (i.initialQuantity > 0 && i.remainingQuantity / i.initialQuantity < 0.35)).map((i) => {
-      "type": "low_stock",
-      "severity": "red",
-      "title": i.medicineName,
-      "batchId": i.batchId,
-      "remainingQuantity": i.remainingQuantity,
-      "remainingPercentage": ((i.remainingQuantity / i.initialQuantity) * 100).round(),
-      "burnRate": "24/day",
-      "depletesInDays": (i.remainingQuantity / 24).round(),
-    }).toList();
+  Future<List<Map<String, dynamic>>> generateSmartAlerts(
+      List<InventoryItem> inventory) async {
+    final local = inventory
+        .where((i) => (i.initialQuantity > 0 &&
+            i.remainingQuantity / i.initialQuantity < 0.35))
+        .map((i) => {
+              "type": "low_stock",
+              "severity": "red",
+              "title": i.medicineName,
+              "batchId": i.batchId,
+              "remainingQuantity": i.remainingQuantity,
+              "remainingPercentage":
+                  ((i.remainingQuantity / i.initialQuantity) * 100).round(),
+              "burnRate": "24/day",
+              "depletesInDays": (i.remainingQuantity / 24).round(),
+            })
+        .toList();
 
     final now = DateTime.now();
     for (var i in inventory) {
@@ -301,7 +347,10 @@ Answer naturally using the blueprint and data.
 
     if (_shouldUseLocal || inventory.isEmpty) return local;
     try {
-      final payload = inventory.map((i) => "${i.medicineName} (Batch: ${i.batchId}): ${i.remainingQuantity}/${i.initialQuantity} units left. Expiry: ${i.expiryDate.toIso8601String()}").join('\n');
+      final payload = inventory
+          .map((i) =>
+              "${i.medicineName} (Batch: ${i.batchId}): ${i.remainingQuantity}/${i.initialQuantity} units left. Expiry: ${i.expiryDate.toIso8601String()}")
+          .join('\n');
       final prompt = '''
 Identify risks in the following inventory:
 $payload
@@ -326,7 +375,10 @@ If type is "low_stock", include:
 Output raw JSON array only.
 ''';
       final response = await _model.generateContent([Content.text(prompt)]);
-      var decoded = jsonDecode(response.text!.replaceAll('```json', '').replaceAll('```', '').trim());
+      var decoded = jsonDecode(response.text!
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim());
       if (decoded is List) {
         return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
@@ -338,8 +390,13 @@ Output raw JSON array only.
   }
 
   // ─── REDISTRIBUTION ────────────────────────────────────────────
-  Future<String> generateRedistributionPlan(List<MedRequest> requests, List<Facility> facilities) async {
-    final indents = requests.where((r) => r.status == RequestStatus.pending && r.type == RequestType.regularIndent).toList();
+  Future<String> generateRedistributionPlan(
+      List<MedRequest> requests, List<Facility> facilities) async {
+    final indents = requests
+        .where((r) =>
+            r.status == RequestStatus.pending &&
+            r.type == RequestType.regularIndent)
+        .toList();
     if (indents.isEmpty) return "No active indents found to optimize.";
 
     try {
@@ -357,7 +414,8 @@ Provide a 2-sentence executive summary explaining the strategy. Mention if any r
 Output plain text only.
 ''';
       final response = await _model.generateContent([Content.text(prompt)]);
-      return response.text?.trim() ?? "Optimizing redistribution routes based on proximity and stock health.";
+      return response.text?.trim() ??
+          "Optimizing redistribution routes based on proximity and stock health.";
     } catch (e) {
       _handleQuotaError(e.toString());
       return "Optimizing ${indents.length} requests across ${facilities.length} sites by matching local surpluses.";
@@ -369,7 +427,8 @@ Output plain text only.
     required List<InventoryItem> items,
     required List<DailyUsageLog> logs,
     int targetMonths = 1,
-    String externalContext = "Current Season: Approaching Monsoon (High Risk for Malaria/Dengue)",
+    String externalContext =
+        "Current Season: Approaching Monsoon (High Risk for Malaria/Dengue)",
   }) async {
     try {
       final prompt = '''
@@ -382,19 +441,23 @@ Output JSON only.
 ''';
 
       final response = await _model.generateContent([Content.text(prompt)]);
-      var decoded = jsonDecode(response.text!.replaceAll('```json', '').replaceAll('```', '').trim());
+      var decoded = jsonDecode(response.text!
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim());
       if (decoded is Map) {
         return Map<String, dynamic>.from(decoded);
       }
       return _localShipmentStrategy(items, logs, targetMonths);
     } catch (e) {
-       _handleQuotaError(e.toString());
-       return _localShipmentStrategy(items, logs, targetMonths);
+      _handleQuotaError(e.toString());
+      return _localShipmentStrategy(items, logs, targetMonths);
     }
   }
 
   // ─── MULTI-MODAL VISION ─────────────────────────────────────────
-  Future<String> parseImageWithVision(Uint8List imageBytes, String prompt) async {
+  Future<String> parseImageWithVision(
+      Uint8List imageBytes, String prompt) async {
     try {
       final content = [
         Content.multi([
@@ -410,12 +473,14 @@ Output JSON only.
     }
   }
 
-  Map<String, dynamic> _localShipmentStrategy(List<InventoryItem> items, List<DailyUsageLog> logs, int targetMonths) {
+  Map<String, dynamic> _localShipmentStrategy(
+      List<InventoryItem> items, List<DailyUsageLog> logs, int targetMonths) {
     Map<String, dynamic> results = {};
     for (var item in items) {
       double sum = 0;
       for (var log in logs) {
-        final matches = log.medicines.where((m) => m.medicineName == item.medicineName);
+        final matches =
+            log.medicines.where((m) => m.medicineName == item.medicineName);
         if (matches.isNotEmpty) sum += matches.first.unitsDistributed;
       }
       double dailyAvg = logs.isEmpty ? 25.0 : sum / logs.length;
@@ -423,7 +488,8 @@ Output JSON only.
       results[item.medicineName] = {
         "active": retentionNeed,
         "coldStorage": (retentionNeed * (12 / targetMonths - 1)).round(),
-        "reasoning": "Local Intelligence: Calculated using current distribution rate of ${dailyAvg.toStringAsFixed(1)} units/day."
+        "reasoning":
+            "Local Intelligence: Calculated using current distribution rate of ${dailyAvg.toStringAsFixed(1)} units/day."
       };
     }
     return results;
