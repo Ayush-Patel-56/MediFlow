@@ -8,7 +8,7 @@ on:
   pull_request_target:
     types: [opened, synchronize]
   schedule:
-    - cron: '30 1 * * *' # Runs daily at 01:30 UTC
+    - cron: '30 1 * * *' # Daily stale check
   workflow_dispatch:
 
 permissions:
@@ -19,8 +19,10 @@ permissions:
 jobs:
   welcome:
     name: Welcome New Contributors
+    # Trigger welcome message when an issue or PR is first opened
     if: (github.event_name == 'issues' || github.event_name == 'pull_request') && github.event.action == 'opened'
     runs-on: ubuntu-latest
+    continue-on-error: true # Ensure automation glitches do not block user activity
 
     steps:
       - name: Welcome message
@@ -32,24 +34,29 @@ jobs:
             Thank you for opening your first issue here. A maintainer will review it shortly. In the meantime, please make sure you have checked our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
           pr-message: |
             Welcome to MediFlow! 🎉
-            Thank you for submitting your first pull request. We appreciate your contribution! Please ensure that you have run local formatting and analysis checks, and filled out the Pull Request template. A maintainer will review your code soon.
+            Thank you for submitting your first pull request. We appreciate your contribution! Please ensure that you have run local formatting and analysis checks. A maintainer will review your code soon.
 
   labeler:
     name: Apply Pull Request Labels
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Apply labels
         uses: actions/labeler@v5
+        continue-on-error: true # Will never fail the build if specific labels do not exist in the repo
         with:
           configuration-path: .github/labeler.yml
-          sync-labels: true
+          sync-labels: false # Safe mode: does not attempt to force delete labels
 
   stale:
     name: Manage Stale Issues & PRs
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    continue-on-error: true
 
     steps:
       - name: Mark Stale Issues & PRs

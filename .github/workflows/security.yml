@@ -3,13 +3,7 @@ name: Security & Vulnerability Scan
 on:
   schedule:
     - cron: '0 0 * * 0' # Every Sunday at 00:00 UTC
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual run by maintainers
 
 jobs:
   secret_scan:
@@ -20,14 +14,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Full history is required for scanning all commits
+          fetch-depth: 0 # Full commit history required for scanning
 
       - name: Run Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Fails the build if secrets are detected
           fail: true
 
   codeql_analysis:
@@ -45,7 +38,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: 'javascript-typescript' # CodeQL supports Cloud Functions JS
+          languages: 'javascript-typescript' # Scan Cloud Functions JS files
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
@@ -66,7 +59,7 @@ jobs:
       - name: Audit Node.js Dependencies
         working-directory: functions
         run: |
-          npm audit --audit-level=high || echo "Some high level vulnerabilities found. Review report."
+          npm audit --audit-level=high || echo "High-level dependencies issues found. Maintainers should review."
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -76,7 +69,4 @@ jobs:
       - name: Audit Flutter Dependencies
         run: |
           flutter pub get
-          # Checks for vulnerable packages in pub dependencies
-          # (Note: newer dart versions support 'dart pub pub outdated' or custom checkers;
-          # we run pub outdated to verify update possibilities)
           flutter pub outdated

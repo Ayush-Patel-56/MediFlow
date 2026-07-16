@@ -5,12 +5,10 @@ on:
     paths:
       - '**/*.md'
       - 'docs/**'
-      - '.github/workflows/documentation.yml'
   pull_request:
     paths:
       - '**/*.md'
       - 'docs/**'
-      - '.github/workflows/documentation.yml'
   workflow_dispatch:
 
 jobs:
@@ -34,6 +32,6 @@ jobs:
         uses: lycheeverse/lychee-action@v2.0.0
         with:
           args: --verbose --no-progress '**/*.md'
-          fail: false # Don't break build for external web link failures, but report them
+          fail: false # Do not fail documentation build for external links being down
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

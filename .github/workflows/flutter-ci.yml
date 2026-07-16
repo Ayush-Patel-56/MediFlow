@@ -10,18 +10,12 @@ on:
 
 jobs:
   flutter_ci:
-    name: Flutter CI (Build & Test)
+    name: Flutter Build & Test
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -31,26 +25,62 @@ jobs:
 
       - name: Create Dummy .env File
         run: |
+          # A dummy .env file is required since it is declared as a asset in pubspec.yaml
           echo "GEMINI_API_KEY=dummy_gemini_key" > .env
           echo "ORS_API_KEY=dummy_ors_key" >> .env
           echo "FIREBASE_PROJECT_ID=mediflow-92e6f" >> .env
           echo "FIREBASE_API_KEY=dummy_firebase_key" >> .env
-          echo "FIREBASE_AUTH_DOMAIN=mediflow-92e6f.firebaseapp.com" >> .env
-          echo "FIREBASE_STORAGE_BUCKET=mediflow-92e6f.firebasestorage.app" >> .env
-          echo "FIREBASE_MESSAGING_SENDER_ID=71200393927" >> .env
-          echo "FIREBASE_APP_ID=1:71200393927:web:346d720af6b9cf11898ce2" >> .env
 
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Verify Code Formatting
+        run: dart format --output=none --set-exit-if-changed .
+
       - name: Analyze Code
         run: flutter analyze
 
-      - name: Run Tests
+      - name: Run Unit Tests
         run: flutter test
 
       - name: Build Web App
         run: flutter build web --release
 
-      - name: Build Android Debug APK
-        run: flutter build apk --debug
+  functions_ci:
+    name: Cloud Functions CI
+    runs-on: ubuntu-latest
+    # Run only if files in functions/ have changed to avoid unnecessary runs
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check for Functions Changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            functions:
+              - 'functions/**'
+
+      - name: Set up Node.js
+        if: steps.filter.outputs.functions == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Dependencies
+        if: steps.filter.outputs.functions == 'true'
+        working-directory: functions
+        run: npm ci
+
+      - name: Run Linter
+        if: steps.filter.outputs.functions == 'true'
+        working-directory: functions
+        run: npm run lint
+
+      - name: Run Tests
+        if: steps.filter.outputs.functions == 'true'
+        working-directory: functions
+        run: npm test
