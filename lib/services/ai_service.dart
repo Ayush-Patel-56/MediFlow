@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../models/daily_usage_log.dart';
 import '../models/request.dart';
@@ -42,8 +40,10 @@ class AIService {
   }
 
   // Helper method to call the generic callGeminiSecure Cloud Function
-  Future<String> _callGeminiBackend(String prompt, {String? imageBase64, String? imageMimeType}) async {
-    final callable = FirebaseFunctions.instance.httpsCallable('callGeminiSecure');
+  Future<String> _callGeminiBackend(String prompt,
+      {String? imageBase64, String? imageMimeType}) async {
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('callGeminiSecure');
     final response = await callable.call({
       'prompt': prompt,
       if (imageBase64 != null) 'imageBase64': imageBase64,
@@ -190,7 +190,8 @@ class AIService {
   }) async {
     if (_shouldUseLocal) return _localSystemResponse(query, context, role);
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('getChatResponseSecure');
+      final callable =
+          FirebaseFunctions.instance.httpsCallable('getChatResponseSecure');
       final response = await callable.call({
         'query': query,
         'context': context,
@@ -296,10 +297,8 @@ If type is "low_stock", include:
 Output raw JSON array only.
 ''';
       final responseText = await _callGeminiBackend(prompt);
-      var decoded = jsonDecode(responseText
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim());
+      var decoded = jsonDecode(
+          responseText.replaceAll('```json', '').replaceAll('```', '').trim());
       if (decoded is List) {
         return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
@@ -361,10 +360,8 @@ Output JSON only.
 ''';
 
       final responseText = await _callGeminiBackend(prompt);
-      var decoded = jsonDecode(responseText
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim());
+      var decoded = jsonDecode(
+          responseText.replaceAll('```json', '').replaceAll('```', '').trim());
       if (decoded is Map) {
         return Map<String, dynamic>.from(decoded);
       }
@@ -380,7 +377,8 @@ Output JSON only.
       Uint8List imageBytes, String prompt) async {
     try {
       final imageBase64 = base64Encode(imageBytes);
-      final responseText = await _callGeminiBackend(prompt, imageBase64: imageBase64, imageMimeType: 'image/jpeg');
+      final responseText = await _callGeminiBackend(prompt,
+          imageBase64: imageBase64, imageMimeType: 'image/jpeg');
       return responseText;
     } catch (e) {
       _handleQuotaError(e.toString());
