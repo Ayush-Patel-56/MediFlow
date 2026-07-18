@@ -220,7 +220,7 @@ high-concurrency performance:
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/pavsoss/MediFlow.git
+   git clone https://github.com/Nebulyn-Labs/MediFlow.git
    cd MediFlow
    ```
 
